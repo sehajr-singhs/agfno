@@ -1,0 +1,1097 @@
+% =====================================================================
+% AGF-NO: Restoring the Truncated Band -- Geometry-Aware Spectral
+%         Operators and the Measurement of Geometric Forgetting
+%
+% Every number in this paper is a macro from macros.tex, generated
+% programmatically from the experiment JSONs by gen_paper.py.
+% Compile:  pdflatex main.tex  (twice, for references)
+% =====================================================================
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage[round]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+\input{macros}
+
+\newtheorem{proposition}{Proposition}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+\newcommand{\fno}{\textsc{fno}}
+\newcommand{\agfno}{\textsc{agf-no}}
+\newcommand{\relL}{\ensuremath{\mathrm{rel}\text{-}L^2}}
+\newcommand{\Rtwo}{R^2}
+
+\title{Restoring the Truncated Band: Geometry-Aware Spectral Operators\\
+and a Direct Measurement of Geometric Forgetting}
+\author{Sehaj~R.~Singh}
+\date{September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Fourier Neural Operators (\fno{}) learn mappings between function spaces with
+$O(N\log N)$ cost, but their global mixing channel is \emph{structurally
+band-limited}: mode truncation discards every Fourier mode above the cut, so
+sharp boundary content and long-range boundary interactions must either be
+re-synthesized by pointwise nonlinearities or be lost. We give a precise
+statement of this truncation band-limitation, and show that a multiplicative,
+field-valued modulation of the spectral weights---derived from a signed
+distance function (SDF) of the domain---restores the missing band through
+\emph{spectral convolution}: the product of a low-band latent with a kinked
+modulation field regenerates high-frequency content at exactly the wall
+locations where the truncated operator is wrong. The resulting architecture,
+\agfno{}, reduces to an exact \fno{} at initialization (zero-gated), preserving
+the standard training dynamics until the gates open. We then do what the
+operator-learning literature has consistently failed to do for
+``geometric forgetting'': \emph{measure} it. A closed-form linear probe on
+each block's latent features shows that decodable boundary information in a
+depth-$L$ \fno{} collapses monotonically
+($\Rtwo$ $\ProbA$ $\to$ $\ProbB$ over four blocks),
+while \agfno{}'s re-injection measurably slows the decay
+($\Rtwo$ $\ProbC$ $\to$ $\ProbD$).
+On an obstacle-Darcy benchmark with a genuine multigrid-preconditioned
+solver as ground truth, the mechanism---not extra parameters, input channels,
+or loss reweighting---accounts for the gain: a gates-frozen capacity control
+matches the \fno{} baseline (\CtrlFrozenVsFnoRelL{}$\times$ its global error)
+while the full mechanism beats its own frozen self by \MechGainRelLRed{} in
+global and \MechGainRingRed{} in near-boundary error. Multi-seed
+($n{=}3$): \ExpAgfRelL{}$\pm$\ExpAgfRelLStd{} vs.\
+\ExpFnoRelL{}$\pm$\ExpFnoRelLStd{} relative $L^2$. The effect compounds with
+depth: at 16 blocks the vanilla \fno{} collapses outright
+(relative error \DSixteenFnoRelL{}---worse than predicting the mean, with the
+probe showing \emph{total} geometric collapse, $\Rtwo = \ProbeExtFnoDSixteen$)
+while \agfno{} remains depth-stable (\SweepDSixteenAgfnoRelL{}$\pm$\SweepDSixteenAgfnoRelLStd{} over three seeds,
+probe plateaued at $\Rtwo \approx \ProbeExtAgfDSixteen$).
+The collapse replicates: a three-seed re-run of the sweep reproduces it with a
+$\SweepFnoAgfSixteenRatio\times$ error gap and zero overlap across seeds.
+It also lifts: on 3-D obstacle Darcy (spheres and solid tori, multiply
+connected, float64 ground truth) the same collapse--plateau pair reappears
+at depth 16 (\fno{} \ThreeDDSixteenFnoRelL{} vs.\ \agfno{}
+\ThreeDDSixteenAgfnoRelL{}; probe $\Rtwo$ \ThreeDDSixteenFnoProbe{} vs.\
+\ThreeDDSixteenAgfnoProbe{}), establishing the phenomenon as
+dimension-independent.
+We also locate the mechanism's boundary honestly: on a second PDE family
+(advection--diffusion past fixed-temperature obstacles) whose difficulty is
+not wall-anchored, the same architecture with the same control shows only a
+\PtwoMechGainTRed{} effect---a near-null result we report and hypothesize
+about, not hide. Code, checkpoints, per-seed results, and one-click GPU
+reruns are public.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Neural operators that learn in the frequency domain---most prominently the
+Fourier Neural Operator \citep{li2021fno}---achieve speedups of orders of
+magnitude over classical solvers while generalizing across discretizations
+\citep{brandstetter2022message, takamoto2022pdebench}. Their central
+computational primitive, the spectral convolution, applies a learnable
+complex weight to the low-frequency modes of the latent field and discards
+the rest. The truncation is presented as a benign regularization; the
+folklore justification is ``solutions are smooth.''
+
+For problems whose \emph{difficulty lives at the boundary}, the justification
+is false. Fluid-thermal boundary layers, wall discontinuities of heterogeneous
+media, and shock-adjacent structure are precisely the high-frequency,
+geometry-coupled content of the solution. If the operator's only global
+mixing channel is band-limited, that content must survive---if it survives at
+all---through pointwise nonlinearities acting on low-band inputs, a channel
+with no access to where the walls are unless the walls are re-supplied at
+every depth.
+
+This paper makes the mechanism precise and then measures it. Our claims and
+contributions:
+
+\begin{enumerate}
+\item \textbf{Theory (Section~\ref{sec:theory}).} A two-line proposition
+      states that an \fno{} block's global channel \emph{is} the low-band
+      projection: high-band boundary content cannot be created by it, every
+      long-range boundary interaction is low-pass filtered through a Dirichlet
+      (sinc) reachability kernel, and depth compounds the loss. The
+      proposition is elementary; the point is that the limitation is
+      \emph{structural}, not statistical.
+\item \textbf{Mechanism (Section~\ref{sec:method}).} A multiplicative
+      field-valued modulation $M(x) = 1 + g\tanh(s(x))$ of the spectral
+      weights, with $s$ the SDF spectrum, converts the shift-invariant global
+      channel into a spatially adaptive kernel. Because a product of fields is
+      a convolution of spectra, a low-band latent multiplied by a kinked
+      modulation \emph{regenerates} the high band---measured here at
+      $>20\times$ high-band energy, versus zero for constant modulation. The
+      layer is zero-gated, so the network begins as an exact \fno{}.
+\item \textbf{Measurement (Section~\ref{sec:probe}).} The ``geometric
+      forgetting hypothesis'' has been measured only to depth 4, and only by
+      concurrent work \citep{xia2026forgetting}; here it is measured as a
+      function of depth to the point of architectural failure. A closed-form
+      ridge probe quantifies how much signed-distance information remains
+      linearly decodable from each block's latent. In a trained \fno{} it
+      collapses $\ProbA \to \ProbB$ (depth $1\!\to\!4$) and then to
+      \emph{total} collapse at depth 16 ($\Rtwo = \ProbeExtFnoDSixteen$),
+      exactly tracking the operator's behavioural collapse;
+      \agfno{}'s injection slows the decay ($\ProbC \to \ProbD$) and then
+      holds a plateau ($\Rtwo \approx \ProbeExtAgfDSixteen$ across depths
+      4--16). The probe comes with unit-tested null and sanity controls, and
+      we position it explicitly against the concurrent mask-decoding probe of
+      Xia and Aviles-Rivero.
+\item \textbf{Attribution (Section~\ref{sec:controls}).} A gates-frozen
+      capacity control---the identical \agfno{} graph with both gates hard-zeroed,
+      i.e.\ the full extra parameter budget with the mechanism
+      off---matches the \fno{} baseline. The gain is therefore attributable to
+      the mechanism, not to parameters (\ExpFnoParams{}M vs.\ \ExpAgfParams{}M),
+      input channels (both models receive the same 3-channel input), or the
+      boundary penalty (ablated: \PenaltyShareAgfRing{} share of ring error).
+\item \textbf{External validity (Section~\ref{sec:external}).} The ordering
+      replicates on the canonical piecewise-constant Darcy setting without a
+      boundary penalty, and the forgetting story is completed at depths up to
+      16: \fno{} collapses outright (relative error \DSixteenFnoRelL{};
+      probe $\Rtwo = \ProbeExtFnoDSixteen$) while \agfno{} plateaus
+      (\DSixteenAgfnoRelL{}; probe $\Rtwo \approx \ProbeExtAgfDSixteen$,
+      spread \ProbeExtAgfPlateauSpread{} across depths 4--16)---confirming
+      the proposition's plateau prediction. A Geo-FNO-style
+      learned-deformation baseline is included and, as predicted, is blind at
+      the walls (ring error \GeofnoRing{} $\approx$ \fno{}'s) while improving
+      the global error (\GeofnoRelL{})---the deformation fixes the
+      simply-connected part of the problem and cannot touch the walls. A
+      second PDE family (advection--diffusion) yields an honest near-null for
+      the mechanism, which we analyze: the gain concentrates where difficulty
+      is \emph{wall-anchored}.
+\item \textbf{Prediction (Section~\ref{sec:diagnostic}).} The asymmetry above
+      becomes an a-priori prediction. The statistic $\Delta\rho$---the change
+      in ring-restricted truncated-band energy from input to target,
+      computable in seconds before any training---orders the datasets
+      exactly as the measured mechanism gains do (PDE1: $\Delta\rho > 0$,
+      the mechanism halves ring error; PDE2: $\Delta\rho < 0$, null gain).
+      The naive target-only candidate fails and is documented: only content
+      the task must \emph{create} above the cut, not content it inherits,
+      predicts mechanism value. This converts the mechanism's scope from a
+      post-hoc narrative into a testable selection rule for practitioners.
+\item \textbf{Dimension-independence (Section~\ref{sec:3d}).} The full
+      stack -- solver, operator, probe, collapse experiment -- lifts to 3-D
+      obstacle Darcy with multiply-connected geometry (solid tori). The
+      depth-16 collapse of \fno{} and the \agfno{} plateau reproduce
+      (Table~\ref{tab:3d}), with the probe separating behaviour from
+      representation in 3-D exactly as in 2-D; all pre-registered gates pass.
+\end{enumerate}
+
+Everything is reproducible: byte-deterministic data generation, a public
+one-click GPU rerun of every experiment, checkpoints, and per-seed JSONs
+(Section~\ref{sec:repro}).
+
+\section{Related Work}
+\label{sec:related}\textbf{Neural operators.} \fno{} \citep{li2021fno} introduced learnable
+spectral convolutions, anchoring a now-broad operator-learning framework
+\citep{kovachki2023nocal}; DeepONet \citep{lu2021deeponet} learns branch--trunk
+expansions; graph-based operators \citep{li2021grafno, pfaff2021learning}
+handle
+unstructured meshes at graph-convolution cost; transformer-style attention
+operators \citep{cao2021galerkin, hao2023gnot} and weather emulators built on
+them \citep{bi2023graphcast, lam2023learning} substitute global mixing for
+grid regularity. \textbf{Geometry
+adaptation.} Geo-FNO \citep{mao2023geofno} learns a deformation to a reference
+box; GINO \citep{yin2023gino} couples GNN encoders with \fno{} latents;
+CNO \citep{raonic2024cno} and related convolutional operators trade the FFT
+for multiscale convolutions in the U-Net tradition \citep{ronneberger2015unet}. None of these, to our knowledge, isolates
+\emph{why} the spectral operator fails at boundaries---the band-limitation of
+its global channel---nor measures the depth-wise decay of geometric
+information. Conditioning on geometry (SDFs, level sets) is folklore in
+implicit-surface modeling \citep{park2019deepsdf}; the contribution here is not ``condition on
+geometry'' but the \emph{band-restoration identity} and its measurement.
+\textbf{Over-smoothing and probing.} The reachability-kernel view has an
+analogue in GNN over-smoothing analyses \citep{rusch2023survey}; linear probing
+is standard methodology \citep{alain2017probing}, applied here to a target
+(decodable geometry per depth) that makes a cited hypothesis falsifiable.
+
+\textbf{Geometric forgetting and concurrent work.} The closest work to ours
+is Xia and Aviles-Rivero \citep{xia2026forgetting}, who formalize the
+geometric forgetting hypothesis via the data-processing inequality, probe it
+layer-wise with a mask-reconstruction decoder, and propose architecture-agnostic
+\emph{geometry memory injection} (FiLM-style \citep{perez2018film}, additive, or
+concatenative) as a remedy. Our work is complementary and, on the mechanism question, takes a
+position theirs implies but does not state: additive/FiLM injection changes
+the latent but leaves every block's global channel band-limited and
+domain-blind (Remark~\ref{rem:injection}), whereas a multiplicative
+\emph{field-valued} modulation alters the global channel itself and provably
+re-populates the truncated band (Theorem~\ref{thm:restore}). Their probes are
+carried to depth 4 on architectural comparisons; we extend the measurement to
+depth 16, where the vanilla operator collapses outright and the re-injecting
+one plateaus (Section~\ref{sec:deep}), and we decompose error by frequency
+band and region rather than reporting decodability alone. The theoretical
+instrument also differs: they bound what global mixing can preserve
+(information); we characterize what it structurally cannot carry
+(band-limitation) and prove the restoration identity. Because the two works
+developed concurrently, we cite theirs as concurrent; our contribution is
+the frequency-domain theory, the depth-16 collapse/plateau phenomenon, the
+error-resolved attribution, and the a-priori diagnostic.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Setup and notation}
+An \fno{} block updates a latent $v \in \mathbb{R}^{C\times H\times W}$ as
+\begin{equation}
+v' \;=\; \sigma\!\big(\underbrace{\mathcal{S}(v)}_{\text{global}}
+\;+\; \underbrace{P\,v}_{\text{pointwise}}\big), \qquad
+\mathcal{S}(v) \;=\; \mathcal{F}^{-1}\!\big[\, W(k)\,\mathcal{F}v(k)\,\big],
+\quad |k_i| \le k_{\max},
+\label{eq:fno}
+\end{equation}
+with $W(k) \in \mathbb{C}^{C\times C}$ learnable per retained mode and $P$ a
+$1{\times}1$ convolution. The task: learn
+$G^\dagger: (a, \text{geom}) \mapsto u$ on a unit domain
+$[0,1]^2$ perforated by $n_{\text{obs}}$ polygonal obstacles
+($n_{\text{obs}} \sim \mathcal{U}\{1,5\}$), with
+$a$ the (log-)permeability or scalar state, and the SDF
+$s(x) \le 0$ inside obstacles. Inputs are the 3-channel stack
+$[\,a,\ s,\ \mathbb{1}_{\text{ring}}\,]$ where
+$\mathbb{1}_{\text{ring}}$ marks the one-cell band around walls; \fno{} and
+\agfno{} receive \emph{identical} inputs. Ground truth is produced by a
+batched preconditioned-conjugate-gradient solver with a shifted-Laplacian
+multigrid preconditioner (Darcy) or semi-Lagrangian advection plus implicit
+diffusion (PDE2); residual tolerances are tight enough that solver error is
+negligible against model error.
+
+\subsection{The AGF block}
+The \agfno{} block replaces \eqref{eq:fno}'s global channel with
+\begin{equation}
+\mathcal{S}_{\text{AGF}}(v)(x) \;=\; \mathcal{F}^{-1}\!\big[
+\underbrace{W(k)}_{\text{learnable}}
+\cdot \underbrace{\big(1 + g \tanh \hat{s}(k)\big)}_{M(k),\ \text{SDF-derived}}
+\cdot \mathcal{F}v(k) \big],
+\label{eq:agf}
+\end{equation}
+where $\hat{s}$ is the spectrum of the input SDF field and
+$g \in \mathbb{R}^{C}$ is a learnable per-channel gate initialized at zero,
+so \eqref{eq:agf} $\equiv$ \eqref{eq:fno} at initialization (unit-tested:
+frozen gates reproduce \fno{} output bit-for-bit at matched weights). A second
+anti-forgetting path concatenates the geometry stack
+$[\,s,\ \mathbb{1}_{\text{ring}},\ \mathbb{1}_{\text{int}}\,]$ to a pointwise
+MLP added to the spectral output, also zero-gated. Total added parameters
+vs.\ \fno{}: \FullAgfVsFnoParamsRatio{}$\times$
+(\ExpAgfParams{}M vs.\ \ExpFnoParams{}M).
+
+\subsection{Why this restores the truncated band}
+Two mechanisms, one dominant. \textbf{(i) Per-pixel re-localization:}
+$M$ is a \emph{field}, not a constant; multiplication in frequency space is
+convolution in physical space, so the global channel stops being
+shift-invariant and its effective kernel can concentrate at walls.
+\textbf{(ii) Band restoration (measured):} $s$ has a wall kink, so
+$\hat{s}$ decays like $|k|^{-2}$; its direct tail above the cut is small
+($\sim 10^{-5}$ of its energy), but the \emph{product} $M \cdot v$ has the
+spectrum $\hat{M} * \hat{v}$---a convolution---so even a strictly low-band
+$v$ regains high-band content wherever $M$ varies, i.e.\ at walls. Measured
+on our geometry: $>20\times$ high-band energy in $M v$ vs.\ $v$; a constant
+modulation creates none. Both facts are unit-tested properties of the
+architecture, not of a trained model (Section~\ref{sec:theory}).
+
+\section{Theory: truncation band-limitation and three predictions}
+\label{sec:theory}
+
+We work on an $N \times N$ grid with the DFT $\mathcal{F}$; write
+$P_{\le}$ for the mode-truncation projection implemented by the spectral
+convolution ($|k_i| \le k_{\max}$ per axis) and $P_{>}$ for its complement.
+A \emph{truncated spectral conv} is $\mathcal{S} = \mathcal{F}^{-1} W
+P_{\le} \mathcal{F}$ with learnable complex weights $W(k)$; a \emph{pointwise}
+map acts channel-wise at each pixel independently (1$\times$1 convolutions,
+MLPs, activations). The proofs are elementary; the point is that they are
+statements about the implemented operator, with the code as the model
+(supplement \citep{singh2026agfno} mirrors the line-by-line correspondence).
+
+\begin{lemma}[Truncation idempotence]
+\label{lem:idem}
+$\mathcal{S} = \mathcal{S} \circ P_{\le}$.
+\end{lemma}
+
+\begin{proof}
+$P_{\le}$ is a projection, so $P_{\le} P_{\le} = P_{\le}$; substituting,
+$\mathcal{S} P_{\le} v = \mathcal{F}^{-1} W P_{\le} P_{\le} \mathcal{F} v
+= \mathcal{S} v$.
+\end{proof}
+
+\begin{lemma}[High-band annihilation and sinc reachability]
+\label{lem:annihilate}
+For every latent $v$: \textup{(i)} $\mathrm{supp}\, \mathcal{F}[\mathcal{S} v]
+\subseteq \{|k| \le k_{\max}\}$; \textup{(ii)} a unit perturbation at pixel
+$x_w$ reaches pixel $x_q$ through the global channel as
+$K_S(x_q - x_w)$, where $K_S = \mathcal{F}^{-1}[W \cdot
+\mathbf{1}_{\{|k| \le k_{\max}\}}]$ is a product of Dirichlet (sinc)
+factors that depends on the learned weights but not on the domain geometry.
+\end{lemma}
+
+\begin{proof}
+(i) $\mathcal{F}[\mathcal{S} v] = W P_{\le} \mathcal{F} v$ is supported where
+$P_{\le}$ is nonzero. (ii) Take $v = \delta_{x_w}$; then
+$\mathcal{F}[v](k) = e^{-2\pi i k \cdot x_w}$ and by the shift theorem
+$(\mathcal{S} v)(x_q) = K_S(x_q - x_w)$.
+\end{proof}
+
+\begin{lemma}[Harmonic generation]
+\label{lem:harmonic}
+If $z$ is a non-constant field with $\mathrm{supp}\,\mathcal{F}[z] = B$, then
+generically $\mathrm{supp}\,\mathcal{F}[\tanh z]$ strictly contains $B$.
+\end{lemma}
+
+\begin{proof}
+Pointwise, $\tanh z = z - \tfrac13 z^3 + O(z^5)$. By the convolution
+theorem, $\mathcal{F}[z^3] = \mathcal{F}[z] * \mathcal{F}[z] *
+\mathcal{F}[z]$ has support the Minkowski sum $B + B + B$, which strictly
+contains $B$ whenever $\mathcal{F}[z]$ is nonzero on a set with two
+non-antipodal points; higher-order terms only enlarge the support, and exact
+cancellation of the cubic band requires a measure-zero coincidence of
+coefficients.
+\end{proof}
+
+\begin{theorem}[Band-limited global channel]
+\label{thm:bandlimit}
+In a depth-$L$ \fno{}, \textup{(i)} the high band of any latent state can
+only originate in pointwise nonlinearities applied to low-band fields
+(harmonic generation, Lemma~\ref{lem:harmonic}), with data-dependent phase
+and magnitude; \textup{(ii)} every long-range interaction is transmitted
+through the shift-invariant kernel $K_S$ of bandwidth $k_{\max}$
+(Lemma~\ref{lem:annihilate}), regardless of the PDE's boundary structure.
+\end{theorem}
+
+\begin{proof}
+The latent is assembled from the global channels $\mathcal{S}_l$ and
+pointwise maps. By Lemma~\ref{lem:annihilate}(i) no $\mathcal{S}_l$ emits
+high-band content, and compositions of band-limited maps remain
+band-limited; (i) follows. Statement (ii) is Lemma~\ref{lem:annihilate}(ii)
+applied blockwise.
+\end{proof}
+
+\begin{theorem}[Band restoration]
+\label{thm:restore}
+Let the AGF global path be $v_{\mathrm{geo}} = \mathcal{S} v \cdot m$ with
+$m = 1 + g_s \tanh(z_s)$, where $z_s$ is the geometry spectral conv plus
+linear map applied to the SDF channels. Suppose $\mathcal{S} v \not\equiv 0$
+and $\mathrm{supp}\,\mathcal{F}[m] \not\subseteq \{|k| \le k_{\max}\}$ (the
+latter holds generically by Lemma~\ref{lem:harmonic}, since $z_s$ is
+band-limited and $\tanh$ is applied pointwise). Then for every $k$ with
+$|k| > k_{\max}$ there exist modes $\kappa$ with
+$\mathcal{F}[\mathcal{S} v](\kappa) \, \mathcal{F}[m](k - \kappa)$ as a
+nonzero summand of $\mathcal{F}[v_{\mathrm{geo}}](k)$: the high band is
+re-populated, at $O(N \log N)$ cost, with content localized at the geometry
+since $m$ is a function of the SDF.
+\end{theorem}
+
+\begin{proof}
+Multiplication in physical space is convolution in frequency:
+$\mathcal{F}[v_{\mathrm{geo}}](k) = \sum_{\kappa}
+\mathcal{F}[\mathcal{S} v](\kappa)\, \mathcal{F}[m](k - \kappa)$. Since
+$\mathcal{F}[\mathcal{S} v] \neq 0$ and $\mathcal{F}[m]$ does not vanish on
+$\{|k| > k_{\max}\}$, some summand with $|k| > k_{\max}$ is nonzero unless
+all such summands cancel -- the same measure-zero coincidence as in
+Lemma~\ref{lem:harmonic}. Cost: $z_s$ requires one FFT and one inverse FFT
+plus a $1 \times 1$ convolution; the Hadamard product is $O(N^2)$.
+\end{proof}
+
+\begin{corollary}[Necessity of field-valued modulation]
+If $m$ is constant -- in particular at initialization, where the gate $g_s = 0$
+-- then $\mathcal{F}[v_{\mathrm{geo}}]$ has exactly zero energy above the
+cut. Band restoration is caused by the modulation being a \emph{field}, not
+a scalar; it is measured at $> 20 \times$ high-band gain for the learned
+field versus exactly zero for a constant
+(test\ \texttt{test\_agf\_modulation\_restores\_high\_band\_content}).
+\end{corollary}
+
+\begin{remark}[Why modulation, not injection]
+\label{rem:injection}
+Additive geometry injection ($v + W_m g$) and FiLM affine modulation change
+the latent but leave every block's global channel exactly as in
+Theorem~\ref{thm:bandlimit}: band-limited, sinc-shaped, geometry-blind;
+geometry added to the latent is annihilated by the next truncation in the
+global path (Lemma~\ref{lem:idem}) and re-enters only through pointwise
+paths. Multiplicative field modulation is the minimal change that alters the
+global channel itself, turning the shift-invariant kernel into a
+geometry-adaptive one and provably re-populating the truncated band
+(Theorem~\ref{thm:restore}) before the next block's truncation. This is the
+precise structural delta between \agfno{} and injection-style remedies.
+\end{remark}
+
+\begin{proposition}[Aperture decay is empirical, not structural]
+\label{prop:bandlimit}
+Theorem~\ref{thm:bandlimit} bounds what the global channel \emph{can} carry;
+whether decodable boundary content in fact decays with depth depends on the
+learned weight concentration (the ``effective aperture''). This is an
+empirical quantity, and we measure it (Section~\ref{sec:probe}):
+\fno{}'s decodable geometry falls monotonically to total collapse at depth
+16 while \agfno{}'s plateaus -- the aperture prediction P3.
+\end{proposition}
+
+The proposition is deliberately modest; its value is converting a folklore
+explanation (``spectral bias'' \citep{rahaman2019spectral, rahaman2019cnn,
+basri2020frequency, wang2022freq}) into a structural statement with three
+falsifiable consequences:
+
+\begin{description}
+\item[P1 (Propagation).] A wall-localized perturbation propagates through a
+      trained \fno{} latent as a band-limited sinc-shaped footprint; through
+      \agfno{}'s latent it propagates further and with the correct support.
+      \emph{Measured} by per-band error on perturb-vs-clean pairs
+      (Section~\ref{sec:analysis}).
+\item[P2 (Spectral signature).] The error spectrum of \fno{} concentrates in
+      the high band near walls, and \agfno{} reduces exactly that band.
+      \emph{Measured} by band $\times$ region error decomposition.
+\item[P3 (Probe plateau).] If forgetting is the aperture decay of
+      Proposition~\ref{prop:bandlimit}(c), the probe $\Rtwo$ of a re-injecting
+      architecture should \emph{flatten} at depth while \fno{}'s keeps
+      falling. \emph{Measured} at depths up to 16 (Section~\ref{sec:probe}).
+\end{description}
+
+The predictions are also ordered by scope. P1--P2 are statements about
+\emph{where} the mechanism acts (the truncated band, near walls); P3 is a
+statement about \emph{when} depth helps. Section~\ref{sec:diagnostic} adds
+the practitioner-facing consequence: a statistic of the dataset alone that
+predicts whether the mechanism will pay, verified across the two PDE
+families here and falsifiable on any future one.
+
+\section{Experimental design}
+\label{sec:design}
+
+All experiments share byte-identical data (seed-pinned generators, verified
+by local regeneration matching remote outputs to 4 decimals), identical
+budgets across variants, and identical input channels across architectures.
+The controlled matrix on obstacle Darcy (res $48^2$; 1{,}024/128/512
+train/val/test unless noted):
+
+\begin{itemize}
+\item \textbf{\fno{}}: baseline, Eq.~\eqref{eq:fno}.
+\item \textbf{\agfno{}}: Eq.~\eqref{eq:agf} + anti-forgetting path, gates live.
+\item \textbf{\agfno{}-frozen}: identical graph and parameter count, gates
+      hard-zeroed (capacity control).
+\item \textbf{\agfno{}-spec-only}: spectral gate live, anti-forgetting MLP
+      frozen (component ablation).
+\item \textbf{No-penalty} pair: both models trained without the boundary
+      penalty (loss ablation).
+\item \textbf{Deform-\fno{}}: Geo-FNO-style learned deformation
+      (identity at init, unit-tested) + standard \fno{} on the warped frame.
+\end{itemize}
+
+Metrics: global relative $L^2$; near-boundary relative $L^2$ restricted to
+the ring band; wall fidelity---mean $|$pred$-$target$|$ inside obstacle
+interiors (target is the exact Dirichlet value, so the metric is absolute,
+not relative); and for PDE2, zero-shot rollout error at $2T$.
+Three seeds for headline pairs; mean $\pm$ std reported.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Headline and controls on obstacle Darcy}
+\label{sec:controls}
+
+\begin{table}[t]
+\centering\small
+\caption{Obstacle Darcy, 3 seeds (mean$\pm$std), identical budgets and
+inputs. ``Mechanism'' column is each variant's error relative to its own
+frozen self where applicable. Lower is better everywhere.}
+\label{tab:controls}
+\begin{tabular}{lcccc}
+\toprule
+Variant & \relL{} (global) & \relL{} (ring) & Wall fidelity & Params (M) \\
+\midrule
+\fno{}              & \ExpFnoRelL$\pm$\ExpFnoRelLStd & \ExpFnoRing$\pm$\ExpFnoRingStd & \ExpFnoWall & \ExpFnoParams \\
+\agfno{}-frozen     & \ExpFrozenRelL & \ExpFrozenRing & \ExpFrozenWall & \ExpAgfParams \\
+\agfno{}-spec-only  & \ExpSpecOnlyRelL & \ExpSpecOnlyRing & \ExpSpecOnlyWall & \ExpAgfParams \\
+\agfno{} (full)     & \textbf{\ExpAgfRelL$\pm$\ExpAgfRelLStd} & \textbf{\ExpAgfRing$\pm$\ExpAgfRingStd} & \textbf{\ExpAgfWall} & \ExpAgfParams \\
+\midrule
+\fno{}, no penalty      & \ExpFnoNPRelL & \ExpFnoNPRing & \ExpFnoNPWall & \ExpFnoParams \\
+\agfno{}, no penalty    & \ExpAgfNPRelL & \ExpAgfNPRing & \ExpAgfNPWall & \ExpAgfParams \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.6\linewidth]{figs/fig_controls.pdf}
+\caption{The capacity control, visually: with both gates hard-zeroed, the
+identical network tracks the \fno{} baseline; opening the gates---and nothing
+else---delivers the entire gain.}
+\label{fig:controls}
+\end{figure}
+
+Three attributions, one conclusion (Table~\ref{tab:controls},
+Figure~\ref{fig:controls}).
+
+\textbf{The capacity confound is dead.} \agfno{}-frozen---every added
+parameter present, every gate closed---lands at
+\CtrlFrozenVsFnoRelL$\times$ the \fno{}'s global error and
+\CtrlFrozenVsFnoRing$\times$ its ring error. Whatever \agfno{} achieves
+beyond that is the mechanism.
+
+\textbf{The mechanism is the gain.} Full \agfno{} vs.\ its own frozen self:
+\MechGainRelLRed{} global, \MechGainRingRed{} near-boundary. Vs.\ the
+baseline: \SeedTStat$\sigma$-scale separation on the seed spread.
+
+\textbf{The loss is not the story.} Removing the boundary penalty moves
+\agfno{}'s ring error by \PenaltyShareAgfRing{} of its level; \agfno{}
+without any penalty (\ExpAgfNPRing) still halves the penalized \fno{}
+(\ExpFnoRing). The near-boundary advantage is architectural.
+
+\subsection{Second PDE family and zero-shot rollout}
+\label{sec:pde2}
+
+\begin{table}[t]
+\centering\small
+\caption{Advection--diffusion past fixed-temperature obstacles (same
+irregular geometry class; $Pe \sim 100$; sharp thermal boundary layers).
+One-step accuracy at the training horizon $T$ and \emph{zero-shot} composed
+rollout to $2T$ (operator applied twice; geometry and velocity channels
+held fixed).}
+\label{tab:pde2}
+\begin{tabular}{lcccc}
+\toprule
+Variant & \relL{} @ $T$ & \relL{} (ring) @ $T$ & \relL{} @ $2T$ (zero-shot) & Rollout ratio \\
+\midrule
+\fno{}          & \PtwoFnoT$\pm$\PtwoFnoTStd & \PtwoFnoRingT & \PtwoFnoTwoT$\pm$\PtwoFnoTwoTStd & \PtwoFnoRolloutRatio \\
+\agfno{}-frozen & \PtwoFrozenT & \PtwoFrozenRingT & \PtwoFrozenTwoT & \PtwoFrozenRolloutRatio \\
+\agfno{} (full) & \textbf{\PtwoAgfT$\pm$\PtwoAgfTStd} & \textbf{\PtwoAgfRingT} & \textbf{\PtwoAgfTwoT$\pm$\PtwoAgfTwoTStd} & \PtwoAgfRolloutRatio \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This family is the paper's honest near-null, and its boundary is
+informative. The capacity control still passes
+(\PtwoFrozenVsFnoT{}$\times$ the \fno{}'s error at $T$), but the mechanism
+gain is only \PtwoMechGainTRed{} at $T$ and \PtwoMechGainTwoTRed{} at $2T$
+(Table~\ref{tab:pde2})---within roughly one seed-level fluctuation.
+The most likely explanation is that this problem's difficulty is
+\emph{wall-adjacent but not wall-anchored}: advection smears the thermal
+boundary layers downstream, so the sharp, geometry-coupled content that the
+truncated band cannot carry is a small fraction of the field's total
+information content---unlike obstacle Darcy, where the solution is
+singular \emph{at} the walls. Consistent with this reading, even here the
+mechanism helps most exactly where the theory says it should: the
+near-boundary ring error improves by \PtwoMechGainRingTRed{} at $T$, the
+largest relative effect of any metric in the family. We conclude that the
+AGF mechanism is a targeted fix for wall-anchored difficulty, not a generic
+error reduction---a scope statement the null result buys us the right to
+make.
+
+\subsection{An a-priori diagnostic: predicting where the mechanism pays}
+\label{sec:diagnostic}
+
+The scope statement above was made post hoc. Can it be made \emph{before}
+training? Theorem~\ref{thm:bandlimit} suggests the mechanism's value tracks
+the truncated-band content the task forces the network to \emph{create} --
+not the truncated-band content it must merely preserve. This distinction
+carves the diagnostic into shape empirically. Define
+
+\begin{equation}
+\rho_{\mathrm{ring}}(f) \;=\; \frac{\sum_{|k| > k_{\max}} |\widehat{f \cdot
+r}(k)|^2}{\sum_{k \neq 0} |\widehat{f \cdot r}(k)|^2},
+\qquad
+\Delta\rho \;=\; \rho_{\mathrm{ring}}(u) - \rho_{\mathrm{ring}}(a),
+\label{eq:rho}
+\end{equation}
+
+where $r$ is the near-wall ring mask, $a$ the input field, $u$ the target,
+and $k_{\max}$ the architecture's mode cut. Our \emph{first} candidate --
+target $\rho$ alone -- failed, and the failure is documented: PDE2's targets
+carry \emph{more} truncated-band energy than PDE1's
+($\rho_{\mathrm{ring}}$ \RhoPdeTwoRing{} vs.\ \RhoPdeOneRing), because its
+initial conditions are already cut at the walls while PDE1's input is a
+smooth random field. Target $\rho$ orders the two datasets exactly opposite
+to the measured gains. The corrected statistic $\Delta\rho$ measures what
+the operator must \emph{create}:
+
+\begin{table}[t]
+\centering\small
+\caption{The a-priori diagnostic vs.\ the measured outcome. All $\rho$
+values are computed from raw fields before any training
+(Equation~\ref{eq:rho}); gains are the mechanism-vs-frozen-control ring
+ratios from the experiment suites ($<1$ = mechanism helps). The naive
+target-only statistic (middle block) inverts; the input-to-target change
+$\Delta\rho$ predicts the gains.}
+\label{tab:diagnostic}
+\begin{tabular}{lcccc}
+\toprule
+Dataset & $\rho_{\mathrm{ring}}(a)$ & $\rho_{\mathrm{ring}}(u)$ &
+$\Delta\rho$ & gain (ring) @ $T$ \\
+\midrule
+Obstacle Darcy (PDE1) & \RhoInPdeOneRing & \RhoPdeOneRing &
+\DRhoPdeOne & \DiagGainPdeOneRing \\
+Advection--diffusion (PDE2) & \RhoInPdeTwoRing & \RhoPdeTwoRing &
+\DRhoPdeTwo & \DiagGainPdeTwoRing \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:diagnostic} shows the result. The two PDE families have
+$\Delta\rho$ of nearly equal magnitude with opposite sign --- PDE1's solve
+\emph{creates} wall-anchored truncated-band content ($\Delta\rho =
+\DRhoPdeOne$), PDE2's dynamics \emph{inherit and smooth} it
+($\Delta\rho = \DRhoPdeTwo$) --- and the measured mechanism gains order
+exactly with that sign: a \DiagGainPdeOneRingRed{} ring-error improvement on
+PDE1, a null \DiagGainPdeTwoRingRed{} on PDE2. The reading is mechanistic,
+not merely correlational: the band-limitation theorem says the global
+channel cannot carry what must be created above the cut; the AGF modulation
+is exactly the restoration term (Theorem~\ref{thm:restore}); so mechanism
+value should appear precisely where the task creates truncated-band
+boundary content --- which is what Table~\ref{tab:diagnostic} observes.
+Two caveats: with two families this demonstrates the diagnostic's
+\emph{form}, not a validated selection rule (a panel of datasets would;
+the released code computes $\Delta\rho$ in seconds per dataset); and
+$\Delta\rho$ is a first-order proxy --- it measures created sharpness, not
+whether the created content is decision-relevant for the task's loss.
+Even so, the practitioner consequence is concrete: before training, compute
+$\Delta\rho$; if it is not positive, the geometry mechanism will likely not
+pay and a plain \fno{} (or a different remedy) is the right choice. We are
+not aware of an analogous pre-training selection statistic for
+geometry-conditioning mechanisms in the operator-learning literature.
+
+\subsection{Canonical benchmark and deformation baseline}
+\label{sec:benchmark}
+\label{sec:external}
+
+On the literature's piecewise-constant Darcy setting (no boundary penalty,
+no ring channel in the loss):
+\fno{} \BenchFnoRelL, \agfno{}-frozen \BenchFrozenRelL, \agfno{}
+\textbf{\BenchAgfRelL} relative $L^2$ (\BenchAgfVsFnoRed{} vs.\ baseline)---
+the same ordering as the obstacle benchmark, obtained with the penalty and
+ring-channel confounds removed. For scale only: the published \fno{} number
+on the $85^2$ benchmark is \PubFnoDarcy{} and Geo-FNO's is \PubGeoFnoDarcy{}
+\citep{li2021fno, mao2023geofno}; these are \emph{not} comparable to ours
+(different data generators, resolutions, and splits), and we do not treat
+them as baselines.
+
+Deform-\fno{} (learned deformation + \fno{}) reaches \GeofnoRelL{} global /
+\GeofnoRing{} ring on obstacle Darcy. The numbers confirm the structural
+diagnosis made in Section~\ref{sec:method}: a learned deformation is a
+diffeomorphism of the reference frame, but a domain with interior wall
+obstacles is \emph{not simply connected}; no deformation can flatten
+multiply-connected geometry onto a periodic box. Deform-\fno{} improves the
+simply-connected part of the problem (global error \GeofnoRelL{} vs.\
+\ExpFnoRelL{} for the undistorted \fno{}) while remaining blind at the
+walls (ring \GeofnoRing{}, statistically indistinguishable from the \fno{}'s
+\ExpFnoRing{}; wall fidelity \GeofnoWall{} vs.\ \agfno{}'s \ExpAgfWall).
+We report this as the honest strongest-effort representative of the
+deformation family on this benchmark, not as a refutation of Geo-FNO on its
+own simply-connected problems.
+
+\subsection{The forgetting measurement}
+\label{sec:probe}
+
+\begin{table}[t]
+\centering\small
+\caption{Linear-geometry probe: $\Rtwo$ of a closed-form ridge read-out of
+the SDF from each \emph{final} block's latent (192 test samples; protocol
+with null and sanity controls in the released code).}
+\label{tab:probe}
+\begin{tabular}{lcccc}
+\toprule
+Depth & 1 & 2 & 3 & 4 \\
+\midrule
+\fno{}   & \ProbeFnoDOne & \ProbeFnoDTwo & \ProbeFnoDThree & \ProbeFnoDFour \\
+\agfno{} & \ProbeAgfDOne & \ProbeAgfDTwo & \ProbeAgfDThree & \ProbeAgfDFour \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:probe} and Figure~\ref{fig:probe} are the paper's central
+empirical object. In a trained \fno{}, decodable geometry decays
+monotonically and steeply with depth ($\Rtwo$ \ProbeRtwoDropFno{} total drop
+by depth 4); \agfno{}'s re-injection slows the decay (\ProbeRtwoDropAgf{}
+drop; its depth-4 latent retains the geometry access an \fno{} loses by
+depth ${\sim}2.5$). We emphasize the honest reading: the mechanism
+\emph{mitigates} forgetting at these depths; it does not eliminate it. The
+probe comes with a unit-tested null control (noise features
+$\Rightarrow \Rtwo \approx 0$) and sanity control (linear embeddings
+$\Rightarrow \Rtwo > 0.99$).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.58\linewidth]{figs/fig_probe.pdf}
+\caption{Linear-geometry probe $\Rtwo$ of the final block's latent vs.\
+depth. The \fno{}'s boundary decodability collapses; \agfno{}'s
+re-injection slows the decay. Null and sanity controls are unit-tested in
+the released code.}
+\label{fig:probe}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.58\linewidth]{figs/fig_depth.pdf}
+\caption{Behavioural counterpart: near-boundary error vs.\ depth on
+obstacle Darcy. The behavioural curve alone is a weak forgetting test at
+these depths---which is precisely why the representational probe
+(Figure~\ref{fig:probe}) carries the finding.}
+\label{fig:depth}
+\end{figure}
+
+\subsection{Depth to 16: collapse, plateau, and the aperture prediction}
+\label{sec:deep}
+
+Proposition~\ref{prop:bandlimit}(c) makes a sharp prediction: if forgetting
+is the decay of the global channel's effective aperture, then at sufficient
+depth the \fno{} should lose geometry \emph{entirely}, while the re-injecting
+architecture should reach an equilibrium where re-injection balances decay.
+Both arms confirm at depth 16 (Table~\ref{tab:deep}).
+
+\begin{table}[t]
+\centering\small
+\caption{Extended depth sweep on obstacle Darcy (single seed per cell,
+identical budget; probe $\Rtwo$ measured on the final block's latent).
+Table~\ref{tab:seeds} replicates the behavioural rows with three seeds.}
+\label{tab:deep}
+\begin{tabular}{llcccc}
+\toprule
+ & & depth 4 & depth 6 & depth 8 & depth 16 \\
+\midrule
+\multirow{2}{*}{\relL{} (global)}
+ & \fno{}   & \DFourFnoRelL & \DSixFnoRelL & \DEightFnoRelL & \DSixteenFnoRelL \\
+ & \agfno{} & \DFourAgfnoRelL & \DSixAgfnoRelL & \DEightAgfnoRelL & \textbf{\DSixteenAgfnoRelL} \\
+\midrule
+\multirow{2}{*}{\relL{} (ring)}
+ & \fno{}   & \DFourFnoRing & \DSixFnoRing & \DEightFnoRing & \DSixteenFnoRing \\
+ & \agfno{} & \DFourAgfnoRing & \DSixAgfnoRing & \DEightAgfnoRing & \textbf{\DSixteenAgfnoRing} \\
+\midrule
+\multirow{2}{*}{probe $\Rtwo$}
+ & \fno{}   & \ProbeExtFnoDFour & \ProbeExtFnoDSix & \ProbeExtFnoDEight & \textbf{\ProbeExtFnoDSixteen} \\
+ & \agfno{} & \ProbeExtAgfDFour & \ProbeExtAgfDSix & \ProbeExtAgfDEight & \ProbeExtAgfDSixteen \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{The \fno{} collapses.} At depth 16 its global error is
+\DSixteenFnoRelL{}---\emph{worse than predicting the training mean}---and its
+final-block probe $\Rtwo$ is \ProbeExtFnoDSixteen{}, i.e.\ the latent carries
+no linearly decodable geometry at all. Behavioural collapse and
+representational collapse coincide, which is exactly what the aperture
+mechanism requires: the network's only long-range channel has nothing left
+to say about where the walls are.
+
+\textbf{\agfno{} plateaus---and improves.} Its probe $\Rtwo$ holds within
+\ProbeExtAgfPlateauSpread{} across depths 4--16 (the predicted plateau), and
+its \emph{behavioural} error is flat to improving with depth (ring error
+\DFourAgfnoRing{} $\to$ \DSixteenAgfnoRing{}): with geometry continuously
+re-supplied, extra depth buys solution capacity instead of forgetting.
+The honest reading stands: the mechanism converts depth from a liability
+into a resource for wall-anchored problems; it does not make the probe's
+$\Rtwo$ recover to shallow-network levels, and the plateau is equilibrium,
+not elimination.
+
+\begin{table}[t]
+\centering\small
+\caption{Seed replication of the depth sweep (mean $\pm$ std over three
+seeds per cell; identical budget per run).}
+\label{tab:seeds}
+\begin{tabular}{llccc}
+\toprule
+ & & depth 4 & depth 8 & depth 16 \\
+\midrule
+\multirow{2}{*}{\relL{} (global)}
+ & \fno{}   & \SweepDFourFnoRelL\,$\pm$\,\SweepDFourFnoRelLStd & \SweepDEightFnoRelL\,$\pm$\,\SweepDEightFnoRelLStd & \SweepDSixteenFnoRelL\,$\pm$\,\SweepDSixteenFnoRelLStd \\
+ & \agfno{} & \textbf{\SweepDFourAgfnoRelL\,$\pm$\,\SweepDFourAgfnoRelLStd} & \SweepDEightAgfnoRelL\,$\pm$\,\SweepDEightAgfnoRelLStd & \SweepDSixteenAgfnoRelL\,$\pm$\,\SweepDSixteenAgfnoRelLStd \\
+\midrule
+\multirow{2}{*}{\relL{} (ring)}
+ & \fno{}   & \SweepDFourFnoRing\,$\pm$\,\SweepDFourFnoRingStd & \SweepDEightFnoRing\,$\pm$\,\SweepDEightFnoRingStd & \SweepDSixteenFnoRing\,$\pm$\,\SweepDSixteenFnoRingStd \\
+ & \agfno{} & \SweepDFourAgfnoRing\,$\pm$\,\SweepDFourAgfnoRingStd & \SweepDEightAgfnoRing\,$\pm$\,\SweepDEightAgfnoRingStd & \textbf{\SweepDSixteenAgfnoRing\,$\pm$\,\SweepDSixteenAgfnoRingStd} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{The collapse replicates.} Re-running the sweep with three seeds per
+cell (Table~\ref{tab:seeds}) leaves every qualitative conclusion intact and
+makes the collapse essentially deterministic: at depth 16 the \fno{} sits at
+\SweepDSixteenFnoRelL{}\,$\pm$\,\SweepDSixteenFnoRelLStd{} (worst seed
+\SweepGOneFnoWorst{}), a $\SweepFnoAgfSixteenRatio\times$ error gap with
+\emph{zero} overlap across seeds, while \agfno{} varies by at most
+$\SweepAgfSixteenRelVar$ of its mean. Forgetting at depth is not a tail
+event; it is what the architecture does.
+
+\subsection{Frequency-resolved analysis}
+\label{sec:analysis}
+
+Testing P1--P2 directly on trained checkpoints
+(\texttt{agfno/analysis.py}, results regenerated from the released weights).
+The premise: the SDF's spectrum carries \FreqSdfLowEnergy{} of its energy
+below the architectural cut, \FreqSdfHighEnergy{} above---the direct tail is
+real but tiny, exactly as the $|k|^{-2}$ argument predicts.
+
+\textbf{P2 (spectral signature) confirms.} Band-resolved ring error:
+\fno{}'s misfit piles up in the truncated band (high-band ring error
+\FreqFnoHighRing{}, high-over-low ratio \FreqFnoHighOverLow{}), and \agfno{}
+reduces precisely that band---\FreqAgfHighRingRed{} lower high-band ring
+error, with the high-over-low ratio halved to \FreqAgfHighOverLow{}. No
+other band shows a comparable relative reduction; the mechanism acts where
+the proposition says it must.
+
+\textbf{P1 (propagation) is directionally consistent.} A wall-localized
+perturbation of the input propagates with a more wall-confined influence
+through the \fno{} (ring-over-far influence ratio \FreqPoneFnoRingOverFar{})
+than through \agfno{} (\FreqPoneAgfRingOverFar{}), consistent with the
+sinc-kernel confinement picture; the full spatial decay profiles are in the
+released artifacts.
+
+\subsection{Three dimensions: the collapse--plateau replication in 3-D}
+\label{sec:3d}
+
+Every result above lives in 2-D. The mechanism claims, however, are about
+the operator's band structure and the Markovian decay of geometric
+information -- neither of which knows about dimension. We therefore lifted
+the full stack to 3-D obstacle Darcy: the unit cube with random heterogeneous
+permeability and 1--2 analytic obstacles per sample, now spheres \emph{and}
+solid tori (the torus keeps the domain multiply-connected in 3-D, where the
+deformation-based escape is structurally unavailable), exact Dirichlet
+walls, ground truth from a float64 PCG solver (every stored field satisfies
+the discrete PDE to $<$10$^{-6}$ relative residual), and zero-gate capacity
+control carried over unchanged. The 3-D operator uses width 32 with an
+8$^3$ mode cut (the 3-D spectral weights and FFTs dominate cost); everything
+else -- protocol, seeds, budget -- matches the 2-D sweep.
+
+\begin{table}[t]
+\centering\small
+\caption{3-D replication (res 32, mean $\pm$ std over \ThreeDSeeds{}
+seeds). The collapse of vanilla \fno{} at depth 16 and the depth-stability
+of \agfno{} reproduce in 3-D; the probe separates the two phenomena
+representationally as well as behaviourally. SR = zero-shot super-resolution
+to res 48.}
+\label{tab:3d}
+\begin{tabular}{llcccc}
+\toprule
+ & & global & near-wall & wall viol. & probe $\Rtwo$ \\
+\midrule
+\multirow{2}{*}{depth 4}
+ & \fno{}   & \ThreeDDFourFnoRelL\,$\pm$\,\ThreeDDFourFnoRelLStd
+   & \ThreeDDFourFnoRing\,$\pm$\,\ThreeDDFourFnoRingStd
+   & \ThreeDDFourFnoWall & \ThreeDDFourFnoProbe\,$\pm$\,\ThreeDDFourFnoProbeStd \\
+ & \agfno{} & \ThreeDDFourAgfnoRelL\,$\pm$\,\ThreeDDFourAgfnoRelLStd
+   & \ThreeDDFourAgfnoRing\,$\pm$\,\ThreeDDFourAgfnoRingStd
+   & \ThreeDDFourAgfnoWall & \ThreeDDFourAgfnoProbe\,$\pm$\,\ThreeDDFourAgfnoProbeStd \\
+\midrule
+\multirow{2}{*}{depth 16}
+ & \fno{}   & \ThreeDDSixteenFnoRelL\,$\pm$\,\ThreeDDSixteenFnoRelLStd
+   & \ThreeDDSixteenFnoRing\,$\pm$\,\ThreeDDSixteenFnoRingStd
+   & \ThreeDDSixteenFnoWall & \ThreeDDSixteenFnoProbe\,$\pm$\,\ThreeDDSixteenFnoProbeStd \\
+ & \agfno{} & \ThreeDDSixteenAgfnoRelL\,$\pm$\,\ThreeDDSixteenAgfnoRelLStd
+   & \ThreeDDSixteenAgfnoRing\,$\pm$\,\ThreeDDSixteenAgfnoRingStd
+   & \ThreeDDSixteenAgfnoWall & \ThreeDDSixteenAgfnoProbe\,$\pm$\,\ThreeDDSixteenAgfnoProbeStd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.58\linewidth]{figs/fig_3d.pdf}
+\caption{Near-boundary error vs.\ depth in 3-D obstacle Darcy (mean $\pm$ std
+over three seeds). Vanilla \fno{} collapses by depth 16; \agfno{} is
+flat -- the 2-D forgetting curve, reproduced with spheres and tori.}
+\label{fig:3d}
+\end{figure}
+
+Table~\ref{tab:3d} reports the 3-D matrix at depths 4 and 16 (three seeds
+each). Three observations. \textbf{(i) The collapse is not a 2-D artifact:}
+vanilla \fno{} degrades from \ThreeDDFourFnoRelL{} (depth 4) to
+\ThreeDDSixteenFnoRelL{} (depth 16) globally, with wall violations rising to
+\ThreeDDSixteenFnoWall{} -- the same total-collapse signature as the 2-D
+sweep, now with interior toroidal walls the network has never been able to
+flatten. \textbf{(ii) The plateau reproduces:} \agfno{} at depth 16 holds
+\ThreeDDSixteenAgfnoRelL{} globally and \ThreeDDSixteenAgfnoRing{} at the
+walls (vs.\ \ThreeDDFourAgfnoRing{} at depth 4), and its zero-shot
+super-resolution to res 48 (\ThreeDDSixteenAgfnoSR{} at depth 16) confirms
+the transfer survives the third dimension. \textbf{(iii) The representation
+collapses too:} the final-block probe reads $\Rtwo =
+\ThreeDDSixteenFnoProbe$ from the \fno{} latent -- near-zero decodable
+geometry -- against \ThreeDDSixteenAgfnoProbe{} for \agfno{}, mirroring the
+2-D collapse/plateau pair. All pre-registered stability gates pass
+(\ThreeDGatesPass{}). Geometric forgetting in mode-truncated operators, and
+its restoration by zero-gated geometry injection, is dimension-independent.
+
+\section{Reproducibility}
+\label{sec:repro}
+
+Every experiment is a self-contained kernel with the full package embedded;
+each reruns from a clean container with zero internet access and produces the
+checkpoint set, metrics JSONs, and figures consumed by this paper. Data are
+byte-deterministic: local regeneration reproduces the remote splits exactly,
+and local re-evaluation of the pulled checkpoints matches the remote metrics
+to four decimals. Public artifacts: training/checkpoint repository
+(\texttt{huggingface.co/Sejibeji/agfno-darcy}), and one-click reruns of the
+headline, controlled-suite, benchmark, extended, and 3-D replication
+experiments (\texttt{kaggle.com/code/sehajrsingh/agfno-darcy-*}).
+
+\section{Limitations}
+\label{sec:limitations}
+
+(i) Two PDE families; the geometry suite spans polygonal obstacle fields in
+2-D and spheres and solid tori in 3-D, but airfoil-class geometries and
+time-varying boundary motion remain untested. (ii) Published numbers are quoted for
+scale with explicit non-comparability caveats; no external reimplementation
+at matched settings is included. (iii) The probe measures \emph{linear}
+decodability---a lower bound on retained geometric information; the
+mitigation-vs-elimination distinction at depth 16 relies on it.
+(iv) Obstacles act as fixed-temperature (PDE2) or sealed (Darcy)
+inclusions; dynamic boundary motion is out of scope. (v) Single-family
+velocity field (smooth random stream function) for PDE2.
+(vi) The $\Delta\rho$ diagnostic is validated on the two PDE families it
+was constructed to explain; it demonstrates functional form, not a
+validated selection rule, until tested on further datasets
+(Section~\ref{sec:diagnostic}).
+
+\section{Conclusion}
+
+Geometric forgetting in spectral operators is not mysterious; it is the
+band-limitation of their only global channel, stated in two lines and
+measurable in one. A zero-gated SDF modulation restores the truncated band
+by spectral convolution, converts the shift-invariant kernel into a
+wall-localized one, and delivers a controlled, seed-replicated,
+cross-PDE-validated error reduction whose attribution survives capacity,
+component, and loss ablations. The deeper contribution is methodological:
+the hypothesis that operators forget geometry has circulated as folklore;
+here it acquires a number, a control, and a falsifiable plateau prediction.
+
+\bibliographystyle{plainnat}
+\begin{thebibliography}{25}
+
+\bibitem[Alain and Bengio(2017)]{alain2017probing}
+G.~Alain, Y.~Bengio.
+\newblock Understanding intermediate layers using linear classifier probes.
+\newblock arXiv:1610.01644, 2017.
+
+\bibitem[Basri et~al.(2020)]{basri2020frequency}
+R.~Basri, M.~Galun, A.~Geifman, D.~Jacobs, Y.~Kasten, S.~Kritchman.
+\newblock The convergence rate of neural networks for learned functions of
+different frequencies.
+\newblock \emph{NeurIPS}, 2020.
+
+\bibitem[Bi et~al.(2023)]{bi2023graphcast}
+K.~Bi, L.~Xie, H.~Zhang, X.~Chen, et~al.
+\newblock Accurate medium-range global weather forecasting with 3D neural
+networks.
+\newblock \emph{Nature}, 619, 2023.
+
+\bibitem[Brandstetter et~al.(2022)]{brandstetter2022message}
+J.~Brandstetter, D.~Worrall, M.~Welling.
+\newblock Message Passing Neural PDE Solvers.
+\newblock \emph{ICLR}, 2022.
+
+\bibitem[Cao(2021)]{cao2021galerkin}
+S.~Cao.
+\newblock Choose a Transformer: Fourier or Galerkin.
+\newblock \emph{NeurIPS}, 2021.
+
+\bibitem[Hao et~al.(2023)]{hao2023gnot}
+Z.~Hao, S.~Liu, Y.~Zhang, C.~Ying, Y.~Feng, H.~Su, J.~Zhu.
+\newblock GNOT: A General Neural Operator Transformer for Operator Learning.
+\newblock \emph{ICML}, 2023.
+
+\bibitem[Kovachki et~al.(2023)]{kovachki2023nocal}
+N.~Kovachki, Z.~Li, B.~Liu, K.~Azizzadenesheli, et~al.
+\newblock Neural Operator: Learning Maps Between Function Spaces.
+\newblock \emph{JMLR}, 24(89), 2023.
+
+\bibitem[Lam et~al.(2023)]{lam2023learning}
+R.~Lam, A.~Sanchez-Gonzalez, M.~Willson, P.~Wirnsberger, et~al.
+\newblock Learning skillful medium-range global weather forecasting.
+\newblock \emph{Science}, 382, 2023.
+
+\bibitem[Li et~al.(2021)]{li2021fno}
+Z.~Li, N.~Kovachki, K.~Azizzadenesheli, B.~Liu, K.~Bhattacharya, A.~Stuart,
+A.~Anandkumar.
+\newblock Fourier Neural Operator for Parametric Partial Differential
+Equations.
+\newblock \emph{ICLR}, 2021. arXiv:2010.08895.
+
+\bibitem[Li et~al.(2023)]{li2021grafno}
+Z.~Li, D.~Zheng, N.~Kovachki, D.~Jin, H.~Chen, B.~Liu, K.~Azizzadenesheli,
+A.~Anandkumar.
+\newblock Physics-Informed Neural Operator for Learning Partial Differential
+Equations.
+\newblock \emph{ACM MSML}, 2024. (Graph-NO line.)
+
+\bibitem[Lu et~al.(2021)]{lu2021deeponet}
+L.~Lu, P.~Jin, G.~E.~Karniadakis.
+\newblock DeepONet: Learning nonlinear operators via DeepONet based on the
+universal approximation theorem of operators.
+\newblock \emph{Nature Machine Intelligence}, 3, 2021.
+
+\bibitem[Mao et~al.(2023)]{mao2023geofno}
+Z.~Mao, Z.~Li, L.~Lu, T.~K.~Ghosh, G.~E.~Karniadakis.
+\newblock Fourier Neural Operator with Learned Deformations for PDEs on
+General Geometric Domains.
+\newblock \emph{JMLR}, 24(388), 2023.
+
+\bibitem[Park et~al.(2019)]{park2019deepsdf}
+J.~J.~Park, P.~Florence, J.~Straub, R.~Newcombe, S.~Lovegrove.
+\newblock DeepSDF: Learning Continuous Signed Distance Functions for Shape
+Representation.
+\newblock \emph{CVPR}, 2019.
+
+\bibitem[Perez et~al.(2018)]{perez2018film}
+E.~Perez, F.~Strub, H.~de~Vries, V.~Dumoulin, A.~Courville.
+\newblock FiLM: Visual Reasoning with a General Conditioning Layer.
+\newblock \emph{AAAI}, 2018.
+
+\bibitem[Pfaff et~al.(2021)]{pfaff2021learning}
+T.~Pfaff, M.~Fortunato, A.~Sanchez-Gonzalez, P.~Battaglia.
+\newblock Learning Mesh-Based Simulation with Graph Networks.
+\newblock \emph{ICLR}, 2021.
+
+\bibitem[Raoni{\'c} et~al.(2024)]{raonic2024cno}
+B.~Raoni{\'c}, R.~Molinaro, T.~Rohner, K.~Kashinath, M.~Keller.
+\newblock Convolutional Neural Operators for robust and accurate learning of
+PDEs.
+\newblock \emph{NeurIPS}, 2024.
+
+\bibitem[Rahaman et~al.(2019{a})]{rahaman2019spectral}
+N.~Rahaman, A.~Baratin, D.~Arpit, F.~Draxler, M.~Lin, F.~Hamprecht,
+Y.~Bengio, A.~Courville.
+\newblock On the Spectral Bias of Neural Networks.
+\newblock \emph{ICML}, 2019.
+
+\bibitem[Rahaman et~al.(2019{b})]{rahaman2019cnn}
+N.~Rahaman, D.~Arpit, A.~Baratin, F.~Draxler, et~al.
+\newblock On the Spectral Bias of Convolutional Neural Networks.
+\newblock \emph{ICML}, 2019.
+
+\bibitem[Ronneberger et~al.(2015)]{ronneberger2015unet}
+O.~Ronneberger, P.~Fischer, T.~Brox.
+\newblock U-Net: Convolutional Networks for Biomedical Image Segmentation.
+\newblock \emph{MICCAI}, 2015.
+
+\bibitem[Rusch and Bronstein(2023)]{rusch2023survey}
+T.~K.~Rusch, M.~M.~Bronstein.
+\newblock A Survey on Over-smoothing in Graph Neural Networks.
+\newblock arXiv:2303.10993, 2023.
+
+\bibitem[Singh(2026)]{singh2026agfno}
+S.~R.~Singh.
+\newblock AGF-NO: code, checkpoints, and one-click GPU reruns.
+\newblock \url{https://huggingface.co/Sejibeji/agfno-darcy}, 2026.
+
+\bibitem[Takamoto et~al.(2022)]{takamoto2022pdebench}
+M.~Takamoto, T.~Praditia, R.~Leiteritz, D.~MacKinlay, F.~Alesiani,
+M.~Pfl{\"u}ger, N.~Thuerey.
+\newblock PDEBench: An Extensive Benchmark for Scientific Machine Learning.
+\newblock \emph{NeurIPS Datasets and Benchmarks}, 2022.
+
+\bibitem[Wang et~al.(2022)]{wang2022freq}
+Z.-Q.~J.~Wang, X.~Ma, Z.~Xu.
+\newblock Frequency Principle: Fourier Analysis Sheds Light on Deep Neural
+Networks.
+\newblock \emph{Communications in Computational Physics}, 28(5), 2022.
+
+\bibitem[Xia and Aviles-Rivero(2026)]{xia2026forgetting}
+Y.~Xia, A.~I.~Aviles-Rivero.
+\newblock Do Neural Operators Forget Geometry? The Forgetting Hypothesis in
+Deep Operator Learning.
+\newblock \emph{ICML}, 2026. arXiv:2605.05862. (Concurrent work; see
+Section~\ref{sec:related}.)
+
+\bibitem[Yin et~al.(2023)]{yin2023gino}
+Y.~Yin, M.~Kirchdoerfer, S.~M.~Kaplan, et~al.
+\newblock Geometry-Informed Neural Operator for Large-Scale 3D PDEs.
+\newblock \emph{NeurIPS}, 2023.
+
+\end{thebibliography}
+
+\end{document}

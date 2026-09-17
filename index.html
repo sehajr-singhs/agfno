@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="AGF-NO: Fourier Neural Operators are structurally band-limited — their only global channel cannot carry geometry. A zero-gated SDF modulation of the spectral weights restores the truncated band, and geometric forgetting becomes measurable, predictable, and fixable — in 2-D and 3-D.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AGF-NO</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/computer-modern/cmu-serif.css">
+
+  <script>
+    MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] } };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+  <style>
+    :root {
+      --ink: #1a1a1a; --muted: #555; --faint: #8c8e90; --panel: #f8f8f8;
+      --border: #c4c6c8; --link: #226999; --good: #1e6b3a; --bad: #b03a2e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: #fff; }
+    body { font-family: 'CMU Serif', Georgia, serif; font-weight: 500;
+      color: var(--ink); -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+    .has-text-centered { text-align: center; }
+    .has-text-justified { text-align: justify; }
+
+    .hero { padding: 4.2rem 0 1.6rem; }
+    .publication-title { font-family: 'CMU Serif', Georgia, serif;
+      font-weight: 700 !important; line-height: 1.12; letter-spacing: 0;
+      font-size: 2.5rem; text-wrap: balance; }
+    .publication-title strong { font-weight: 900 !important; }
+    .publication-sub { margin-top: 1.1rem; font-family: 'Inter', sans-serif;
+      font-size: 1.05rem; color: var(--muted); line-height: 1.5;
+      max-width: 60rem; margin-left: auto; margin-right: auto; }
+    .tagline { margin-top: 0.9rem; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.92rem; color: var(--ink); letter-spacing: 0.01em; }
+    .authors { margin-top: 1.2rem; font-family: 'Inter', sans-serif;
+      font-size: 0.95rem; color: var(--ink); }
+    .affiliation { margin-top: 0.15rem; font-family: 'Inter', sans-serif;
+      font-size: 0.82rem; color: var(--faint); }
+    .links { margin-top: 1.5rem; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.88rem; display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem;
+      justify-content: center; }
+
+    .section { padding: 2.4rem 0 1.2rem; }
+    .title { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em;
+      margin-bottom: 1rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); }
+    .section p { line-height: 1.6; color: var(--ink); margin-bottom: 0.9rem; }
+    .muted { color: var(--muted); }
+
+    .abstract { background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1.4rem 1.6rem; font-size: 0.99rem;
+      line-height: 1.62; text-align: justify; }
+
+    .impact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.2rem; margin-top: 1.1rem; }
+    .impact { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .impact-img { width: 100%; display: block; border-bottom: 1px solid var(--border); }
+    .impact-body { padding: 0.9rem 1.1rem 1.05rem; }
+    .impact-num { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;
+      font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+      color: var(--ink); margin-bottom: 0.35rem; }
+    .impact-body p { font-size: 0.88rem; line-height: 1.5; color: var(--muted); margin: 0; }
+
+    table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;
+      font-size: 0.83rem; margin: 1rem 0 1.4rem; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    th, td { padding: 0.5rem 0.65rem; text-align: right; border-bottom: 1px solid var(--border); }
+    th:first-child, td:first-child { text-align: left; }
+    thead th { font-weight: 600; font-size: 0.78rem; letter-spacing: 0.02em;
+      text-transform: uppercase; color: var(--muted); background: #fff; }
+    tbody tr:last-child td { border-bottom: none; }
+    td.win { color: var(--good); font-weight: 700; }
+    td.bad { color: var(--bad); font-weight: 600; }
+    .table-note { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem;
+      color: var(--faint); margin-top: -1rem; margin-bottom: 1.2rem; }
+    .tablescroll { overflow-x: auto; }
+
+    pre { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+      padding: 1.1rem 1.3rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;
+      line-height: 1.55; overflow-x: auto; margin: 1rem 0; }
+
+    footer { margin-top: 3rem; padding: 1.6rem 0 2.6rem; border-top: 1px solid var(--border);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--faint);
+      text-align: center; }
+    @media (max-width: 600px) { .publication-title { font-size: 1.8rem; }
+      th, td { padding: 0.4rem 0.4rem; font-size: 0.74rem; } }
+  </style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="container has-text-centered">
+    <h1 class="publication-title">Restoring the Truncated Band</h1>
+    <div class="tagline">Geometry-aware spectral operators — and a direct measurement of geometric forgetting, in 2-D and 3-D.</div>
+    <div class="authors">Sehaj Randhir Singh</div>
+    <div class="affiliation">Independent researcher; partial affiliation with NYU Tandon School of Engineering</div>
+    <div class="links">
+      <a href="paper/agfno_paper.pdf">Paper (15 pages)</a><a href="https://github.com/sehajr-singhs/agfno">GitHub (code + data)</a><a href="https://huggingface.co/Sejibeji/agfno-darcy">Models &amp; artifacts</a><a href="https://www.kaggle.com/datasets/sehajrsingh/agfno-exp4-artifacts">Results on Kaggle</a>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+<section class="section"><div class="abstract"><p>Fourier Neural Operators learn mappings between function spaces with \(O(N\log N)\) cost, but their global mixing channel is <em>structurally band-limited</em>: mode truncation discards every Fourier mode above the cut, so sharp boundary content and long-range boundary interactions must either be re-synthesized by pointwise nonlinearities or be lost. This paper states the truncation band-limitation precisely, and shows that a multiplicative, field-valued modulation of the spectral weights — derived from a signed distance function (SDF) of the domain — restores the missing band <em>through spectral convolution</em>: the product of a low-band latent with a kinked modulation field regenerates high-frequency content at exactly the wall locations where the truncated operator is wrong. The architecture, <strong>AGF-NO</strong>, is zero-gated: it begins as an exact FNO and learns how much geometry to use. The paper then does what the operator-learning literature has consistently failed to do for "geometric forgetting": <strong>measure it</strong>. A closed-form linear probe on each block's latent shows decodable boundary information collapsing with depth (probe \(R^2\) 0.896 → 0.472 over four blocks) to <em>total</em> collapse at depth 16 (\(R^2 = 0.0003\)) — exactly tracking the operator's behavioural collapse (rel-L² 1.005, three seeds, zero overlap with the healthy regime) — while the re-injecting operator plateaus (0.633). The collapse–plateau replication lifts to <strong>three dimensions</strong> (spheres and solid tori: FNO 1.008 vs AGF-NO 0.113 at depth 16; probe 0.020 vs 0.494), so the phenomenon is dimension-independent. A Geo-FNO-style deformation baseline confirms the structural diagnosis (interior walls are not simply connected — no diffeomorphism flattens them), a closed-form a-priori diagnostic predicts where the mechanism pays on a second PDE family, and every claim is seed-replicated with every number traced to a committed JSON.</p></div></section>
+
+<section class="section"><h2 class="title">The mechanism: modulate the weights, not the latent</h2><p>An FNO block's global channel <em>is</em> the low-band projection: high-band boundary content cannot be created by it, and every long-range boundary interaction is low-pass filtered through a Dirichlet (sinc) reachability kernel. Depth compounds the loss. Additive or FiLM-style geometry injection changes the latent but leaves every block's global channel exactly as band-limited as before — geometry added to the latent is annihilated by the next truncation. Multiplicative, field-valued modulation is the minimal change that alters the global channel itself: a product of fields is a convolution of spectra, so a low-band latent multiplied by a kinked modulation regenerates the high band — measured at <strong>&gt;20× high-band energy at the walls</strong>, versus zero for any constant modulation. Because both geometry paths are zero-gated, AGF-NO starts as an exact FNO (unit-tested to numerical identity) and inherits its training dynamics until the gates open.</p>
+<div class="impact-grid"><div class="impact"><img class="impact-img" src="figs/fig_controls.png" alt=""><div class="impact-body"><div class="impact-num">Controls, both directions</div><p>Freeze the gates and you get the FNO back (error ratio 0.97 — no free capacity win). Remove the penalty from the loss and AGF-NO still wins on every metric (0.082 vs 0.125) — the mechanism, not the loss term, carries the effect. Identical inputs, identical budgets, 3 seeds.</p></div></div><div class="impact"><img class="impact-img" src="figs/fig_probe.png" alt=""><div class="impact-body"><div class="impact-num">Forgetting, measured per block</div><p>Closed-form ridge probe for SDF decodability in each block's latent. FNO: 0.896 → 0.472 over four blocks, → 0.0003 at depth 16 — geometry erased. AGF-NO: 0.934 → 0.591, → 0.633 plateau (spread 0.045 across depths 4–16).</p></div></div><div class="impact"><img class="impact-img" src="figs/fig_depth.png" alt=""><div class="impact-body"><div class="impact-num">Collapse, then plateau</div><p>Behavioural counterpart: near-wall error vs depth. FNO degrades gently to depth 8, then collapses outright at 16 (global rel-L² 1.005 ± 0.002 — a 12.0× ratio to AGF-NO, whose seed variance at 16 is 1.4%). The probe predicts it; the loss delivers it.</p></div></div><div class="impact"><img class="impact-img" src="figs/fig_3d.png" alt=""><div class="impact-body"><div class="impact-num">The 3-D replication</div><p>Spheres + solid tori (multiply-connected — deformation escapes are structurally unavailable). FNO: 0.144 at depth 4 → 1.008 ± 0.000 at 16, zero seed overlap. AGF-NO: 0.077 → 0.113, depth-stable. The phenomenon is dimension-independent.</p></div></div></div></section>
+
+<section class="section"><h2 class="title">Numbers</h2><p><strong>2-D obstacle Darcy</strong> (48², 3 seeds, identical budgets; global rel-L² and near-wall "ring" rel-L²):</p>
+<div class="tablescroll"><table><thead><tr><th>depth</th><th>FNO global</th><th>FNO ring</th><th>AGF-NO global</th><th>AGF-NO ring</th></tr></thead><tbody>
+<tr><td>4</td><td>0.1250 ± 0.0030</td><td>0.2506 ± 0.0011</td><td class="win">0.0801 ± 0.0010</td><td class="win">0.1123 ± 0.0035</td></tr>
+<tr><td>8</td><td>0.1449 ± 0.0040</td><td>0.2573 ± 0.0025</td><td class="win">0.1109 ± 0.0058</td><td class="win">0.1279 ± 0.0016</td></tr>
+<tr><td>16</td><td class="bad">1.0054 ± 0.0016 — collapsed</td><td class="bad">0.7964 ± 0.0069</td><td class="win">0.0841 ± 0.0012 — stable</td><td class="win">0.1057 ± 0.0020</td></tr>
+</tbody></table></div>
+<div class="table-note">The depth-16 collapse is not a tail event: the best collapsed FNO seed is still 1.0036. Probe R² (SDF decodability, final block): FNO 0.0003 vs AGF-NO 0.6327.</div>
+<p><strong>3-D obstacle Darcy</strong> (32³, spheres + tori, 3 seeds):</p>
+<div class="tablescroll"><table><thead><tr><th>depth</th><th>FNO global</th><th>FNO ring</th><th>probe R²</th><th>AGF-NO global</th><th>AGF-NO ring</th><th>probe R²</th></tr></thead><tbody>
+<tr><td>4</td><td>0.144 ± 0.020</td><td>0.229 ± 0.007</td><td>0.494 ± 0.044</td><td class="win">0.077 ± 0.003</td><td class="win">0.085 ± 0.003</td><td class="win">0.530 ± 0.023</td></tr>
+<tr><td>16</td><td class="bad">1.008 ± 0.000</td><td class="bad">0.907 ± 0.001</td><td class="bad">0.020 ± 0.012</td><td class="win">0.113 ± 0.003</td><td class="win">0.124 ± 0.003</td><td class="win">0.494 ± 0.015</td></tr>
+</tbody></table></div>
+<div class="table-note">Wall violations at depth 16: FNO 0.034 → 0.771 (the field leaks into the obstacles); AGF-NO 0.0008. At depth 4 the full matrix also gives zero-shot 48³ super-resolution: AGF-NO 0.695 vs FNO 0.744 rel-L².</div>
+<p><strong>Canonical benchmark &amp; baselines.</strong> On the literature's piecewise-constant Darcy setting, with the penalty and ring-channel confounds removed, AGF-NO reduces global error 25% (0.194 → 0.145). A Geo-FNO-style learned deformation improves the simply-connected part of the problem (0.106 vs 0.123 global) but stays blind at the walls (ring 0.239, statistically indistinguishable from FNO's; wall fidelity 0.076 vs AGF-NO's 0.005) — a domain with interior wall obstacles is not simply connected, so no diffeomorphism of the box flattens it. Published FNO (0.0082) and Geo-FNO (0.0068) numbers are quoted for scale only, with explicit non-comparability caveats (different generators, resolutions, splits).</p>
+<p><strong>Second PDE family &amp; the a-priori diagnostic.</strong> On the advection family the error is boundary-resolved there too, and the zero-shot rollout ratio is ~1.44 for both models — the fix adds fidelity, not fragility. A closed-form diagnostic (Δρ: the geometric skew of near-wall error under the frozen operator) is computable <em>before any training</em>, from data the practitioner already has: on Darcy it predicts a large boundary-mechanism gain (+0.024, measured 55% ring reduction); on advection it predicts a small one (−0.024, measured 4%). Functional form, validated on both families, honestly scoped in the paper's limitations.</p></section>
+
+<section class="section"><h2 class="title">Theory in one breath</h2><p>The global channel of a spectral-convolution block is multiplication by a mask in Fourier space — convolution with a sinc kernel in physical space. That kernel is shift-invariant: it cannot know where the walls are, and it cannot carry what they look like. Three falsifiable predictions fall out, and all three are measured: <strong>P1</strong> — a wall-localized perturbation propagates through a trained FNO latent as a band-limited sinc-shaped footprint (measured ring-to-far error ratio 1.66 for FNO vs 1.32 for AGF-NO); <strong>P2</strong> — multiplicative modulation regenerates the truncated band (measured: 43% lower high-band ring error, &gt;20× wall high-band energy vs constant modulation); <strong>P3</strong> — decodable geometry decays with depth for the vanilla operator and plateaus for the re-injecting one (measured: 0.0003 vs 0.633 at depth 16, replicated in 3-D at 0.020 vs 0.494). The over-smoothing analogy is deliberate: GNNs were diagnosed the same way — representationally, layer by layer — before the field accepted the mechanism.</p></section>
+
+<section class="section"><h2 class="title">Reproduce</h2><p style="margin-bottom:0.4rem"><a href="https://huggingface.co/Sejibeji/agfno-darcy">Trained models + full artifact stack on Hugging Face</a> · <a href="https://www.kaggle.com/datasets/sehajrsingh/agfno-exp4-artifacts">Result JSONs on Kaggle</a></p><pre>git clone https://github.com/sehajr-singhs/agfno
+cd agfno
+pip install -r requirements.txt
+
+python -m pytest agfno/tests -q        # 41 tests: solvers, SDFs, zero-gate identity, gates, probe
+python smoke_suite.py                  # CPU smoke of every experiment family
+
+python launch.py                       # 2-D matrix + forgetting sweep (Modal A100 / local CUDA)
+python launch.py --quick               # sanity run
+python -m agfno.experiments4 --quick   # 3-D matrix (T4-scale)</pre><p class="muted">Seeded protocol (3 seeds per condition; per-seed JSONs committed in results/runs/), 221 programmatic paper macros, one-click GPU reruns. Every number on this page is typeset from the same JSONs.</p></section>
+</div>
+
+<footer>
+  <div class="container">
+    Sehaj Randhir Singh · independent researcher; partial affiliation with NYU Tandon ECE · 2026
+  </div>
+</footer>
+
+</body>
+</html>

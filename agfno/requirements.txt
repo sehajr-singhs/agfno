@@ -1,0 +1,13 @@
+# Local dev/test extras only -- the authoritative environment is the Modal
+# image defined in remote.py (torch, numpy, scipy, matplotlib, huggingface_hub,
+# kaggle, kagglehub, tqdm, filelock, pytest on python 3.11 + CUDA).
+torch
+numpy<2.3
+matplotlib
+filelock
+pytest
+huggingface_hub
+kaggle
+kagglehub
+tqdm
+modal

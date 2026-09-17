@@ -1,0 +1,20 @@
+# IOO conservation-slip suite -- pinned reproduction environment
+# ------------------------------------------------------------------
+# The manuscript's headline claims are anchored to deterministic
+# LOGISTIC-REGRESSION numbers (the RF rows saturate at AUC ~0.98-0.99 and
+# move 0.978<->0.988 across environments; LR rows are stable to +-0.002
+# and are the ones quoted in the text). Kaggle kernels run in Kaggle's
+# Python-3.11 image (numpy 1.24.x / sklearn 1.2.x era); the pins below
+# are the LOCAL environment used to regenerate figures and run QUICK
+# sanity checks. Kernel-side pins are on record in each kernel's log
+# (versions are printed at startup by kernel_lib).
+numpy>=1.24,<2.0        # local dev used 2.x; both satisfy the LR claims
+pandas>=1.5
+scikit-learn>=1.2
+scipy>=1.10
+torch>=2.1               # CPU is sufficient for every kernel in the suite
+matplotlib>=3.7          # ioo_paper/make_figs.py
+kaggle>=1.6              # ioo_kaggle/push_*.py
+# ripser is optional: kernel_lib_v2 persistent_homology falls back to a
+# scale-sweep proxy when ripser is absent (enabled via IOO_TDA=1).
+# ripser>=0.6
