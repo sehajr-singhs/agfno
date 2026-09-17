@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: >-
+  If you use this work, please cite the paper below.
+title: >-
+  Restoring the Truncated Band: Geometry-Aware Spectral Operators
+  and a Direct Measurement of Geometric Forgetting
+authors:
+  - family-names: Singh
+    given-names: Sehaj R.
+version: v1.0.0
+date-released: "2026-09-17"
+license: MIT
+repository-code: "https://github.com/sehajr-singhs/agfno"
+url: "https://sehajr-singhs.github.io/agfno/"
+abstract: >-
+  Fourier Neural Operators learn solution operators for PDEs, but their only
+  global channel - the truncated spectral convolution - is structurally
+  band-limited. We show this makes FNOs forget domain geometry as depth grows,
+  introduce a zero-gated SDF modulation of the spectral weights that restores
+  the truncated band at identical compute, and directly measure geometric
+  forgetting via a linear probe on layer activations. The effect replicates
+  across seeds, PDE families, and in 3-D (spheres and tori), where depth-16
+  FNO collapses (rel-L2 ~ 1.01) while the geometry-aware operator remains
+  depth-stable (0.11).
+keywords:
+  - neural operators
+  - Fourier neural operator
+  - geometric forgetting
+  - scientific machine learning
+  - PDEs
