@@ -75,9 +75,11 @@ agfno/            package
   diagnostic.py   a-priori Δρ diagnostic
   experiments*.py controlled matrix, PDE2, depth sweep (3 seeds), 3-D matrix
   tests/          41 tests
-paper/            main.tex (15 pp), macros.tex (221 programmatic macros), compiled PDF
+paper/            main.tex (15 pp), macros.tex (221 programmatic macros), compiled PDF,
+                  gen_hero.py (regenerates the qualitative hero figure from the HF checkpoints)
 results/          committed run JSONs (12 cells × 3 seeds) + summaries
-figs/             paper figures (PNG)
+figs/             paper figures (PNG), incl. hero_qualitative.png (depth-16 FNO 1.010 vs
+                  AGF-NO 0.060 on the median held-out case; boundaries outlined in cyan)
 ```
 
 ## License

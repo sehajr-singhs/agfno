@@ -57,6 +57,11 @@
       border-radius: 6px; padding: 1.4rem 1.6rem; font-size: 0.99rem;
       line-height: 1.62; text-align: justify; }
 
+    .hero-fig { margin-top: 1.6rem; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; }
+    .hero-fig img { width: 100%; display: block; }
+    .hero-fig .impact-body { padding: 0.85rem 1.2rem 1rem; }
+
     .impact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 1.2rem; margin-top: 1.1rem; }
     .impact { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -107,6 +112,7 @@
 </section>
 
 <div class="container">
+<div class="hero-fig"><img src="figs/hero_qualitative.png" alt="Depth-16 FNO vs AGF-NO on a held-out Darcy flow with interior obstacles"><div class="impact-body"><div class="impact-num">One held-out case, depth 16</div><p>Ground truth (left), the depth-16 FNO (center, rel-L² 1.010 — collapsed: a smooth field with the geometry gone), and AGF-NO (right, rel-L² 0.060). The case is the median-FNO-error member of the held-out batch; all eight per-sample FNO values sit in 0.79–1.10. Obstacle boundaries outlined in cyan.</p></div></div>
 <section class="section"><div class="abstract"><p>Fourier Neural Operators learn mappings between function spaces with \(O(N\log N)\) cost, but their global mixing channel is <em>structurally band-limited</em>: mode truncation discards every Fourier mode above the cut, so sharp boundary content and long-range boundary interactions must either be re-synthesized by pointwise nonlinearities or be lost. This paper states the truncation band-limitation precisely, and shows that a multiplicative, field-valued modulation of the spectral weights — derived from a signed distance function (SDF) of the domain — restores the missing band <em>through spectral convolution</em>: the product of a low-band latent with a kinked modulation field regenerates high-frequency content at exactly the wall locations where the truncated operator is wrong. The architecture, <strong>AGF-NO</strong>, is zero-gated: it begins as an exact FNO and learns how much geometry to use. The paper then does what the operator-learning literature has consistently failed to do for "geometric forgetting": <strong>measure it</strong>. A closed-form linear probe on each block's latent shows decodable boundary information collapsing with depth (probe \(R^2\) 0.896 → 0.472 over four blocks) to <em>total</em> collapse at depth 16 (\(R^2 = 0.0003\)) — exactly tracking the operator's behavioural collapse (rel-L² 1.005, three seeds, zero overlap with the healthy regime) — while the re-injecting operator plateaus (0.633). The collapse–plateau replication lifts to <strong>three dimensions</strong> (spheres and solid tori: FNO 1.008 vs AGF-NO 0.113 at depth 16; probe 0.020 vs 0.494), so the phenomenon is dimension-independent. A Geo-FNO-style deformation baseline confirms the structural diagnosis (interior walls are not simply connected — no diffeomorphism flattens them), a closed-form a-priori diagnostic predicts where the mechanism pays on a second PDE family, and every claim is seed-replicated with every number traced to a committed JSON.</p></div></section>
 
 <section class="section"><h2 class="title">The mechanism: modulate the weights, not the latent</h2><p>An FNO block's global channel <em>is</em> the low-band projection: high-band boundary content cannot be created by it, and every long-range boundary interaction is low-pass filtered through a Dirichlet (sinc) reachability kernel. Depth compounds the loss. Additive or FiLM-style geometry injection changes the latent but leaves every block's global channel exactly as band-limited as before — geometry added to the latent is annihilated by the next truncation. Multiplicative, field-valued modulation is the minimal change that alters the global channel itself: a product of fields is a convolution of spectra, so a low-band latent multiplied by a kinked modulation regenerates the high band — measured at <strong>&gt;20× high-band energy at the walls</strong>, versus zero for any constant modulation. Because both geometry paths are zero-gated, AGF-NO starts as an exact FNO (unit-tested to numerical identity) and inherits its training dynamics until the gates open.</p>
@@ -139,7 +145,8 @@ python smoke_suite.py                  # CPU smoke of every experiment family
 
 python launch.py                       # 2-D matrix + forgetting sweep (Modal A100 / local CUDA)
 python launch.py --quick               # sanity run
-python -m agfno.experiments4 --quick   # 3-D matrix (T4-scale)</pre><p class="muted">Seeded protocol (3 seeds per condition; per-seed JSONs committed in results/runs/), 221 programmatic paper macros, one-click GPU reruns. Every number on this page is typeset from the same JSONs.</p></section>
+python -m agfno.experiments4 --quick   # 3-D matrix (T4-scale)
+python paper/gen_hero.py               # regenerate the hero figure from the HF checkpoints</pre><p class="muted">Seeded protocol (3 seeds per condition; per-seed JSONs committed in results/runs/), 221 programmatic paper macros, one-click GPU reruns. Every number on this page is typeset from the same JSONs.</p></section>
 </div>
 
 <footer>
