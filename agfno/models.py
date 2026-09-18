@@ -271,6 +271,8 @@ class Operator2D(nn.Module):
         use_coord_features: bool = True,
         n_coord_features: int = 4,
         gate_mode: str = "full",  # "full" | "spec_only" | "frozen"
+        block_cls=None,  # custom block class (AFNO family); None -> _make_block
+        block_kwargs: dict | None = None,
     ):
         super().__init__()
         self.kind = kind
@@ -278,23 +280,38 @@ class Operator2D(nn.Module):
         self.gate_mode = gate_mode
         # Lifting: 1x1 conv from physics channels to latent width.
         self.lift = nn.Conv2d(in_ch, width, 1)
-        self.blocks = nn.ModuleList(
-            [
-                _make_block(
-                    kind,
-                    width=width,
-                    modes_h=modes_h,
-                    modes_w=modes_w,
-                    sdf_ch=sdf_ch,
-                    mlp_ratio=mlp_ratio,
-                    dropout=dropout,
-                    gate_max=gate_max,
-                    use_coord_features=use_coord_features,
-                    n_coord_features=n_coord_features,
-                )
-                for _ in range(n_blocks)
-            ]
-        )
+        if block_cls is not None:
+            bkw = dict(
+                width=width,
+                modes_h=modes_h,
+                modes_w=modes_w,
+                sdf_ch=sdf_ch,
+                mlp_ratio=mlp_ratio,
+                dropout=dropout,
+                gate_max=gate_max,
+                use_coord_features=use_coord_features,
+                n_coord_features=n_coord_features,
+            )
+            bkw.update(block_kwargs or {})
+            self.blocks = nn.ModuleList([block_cls(**bkw) for _ in range(n_blocks)])
+        else:
+            self.blocks = nn.ModuleList(
+                [
+                    _make_block(
+                        kind,
+                        width=width,
+                        modes_h=modes_h,
+                        modes_w=modes_w,
+                        sdf_ch=sdf_ch,
+                        mlp_ratio=mlp_ratio,
+                        dropout=dropout,
+                        gate_max=gate_max,
+                        use_coord_features=use_coord_features,
+                        n_coord_features=n_coord_features,
+                    )
+                    for _ in range(n_blocks)
+                ]
+            )
         hidden = 2 * width
         self.proj = nn.Sequential(
             nn.Conv2d(width, hidden, 1),
@@ -318,14 +335,17 @@ class Operator2D(nn.Module):
         # ------------------------------------------------------------------
         if gate_mode == "spec_only":
             for blk in self.blocks:
-                blk.gate_mlp.data.zero_()
-                blk.gate_mlp.requires_grad_(False)
+                if hasattr(blk, "gate_mlp"):
+                    blk.gate_mlp.data.zero_()
+                    blk.gate_mlp.requires_grad_(False)
         elif gate_mode == "frozen":
             for blk in self.blocks:
-                blk.gate_spec.data.zero_()
-                blk.gate_spec.requires_grad_(False)
-                blk.gate_mlp.data.zero_()
-                blk.gate_mlp.requires_grad_(False)
+                if hasattr(blk, "gate_spec"):
+                    blk.gate_spec.data.zero_()
+                    blk.gate_spec.requires_grad_(False)
+                if hasattr(blk, "gate_mlp"):
+                    blk.gate_mlp.data.zero_()
+                    blk.gate_mlp.requires_grad_(False)
 
     def forward(self, a: torch.Tensor, sdf: torch.Tensor) -> torch.Tensor:
         """a: [B, in_ch, H, W] physics input; sdf: [B, sdf_ch, H, W]."""
@@ -377,6 +397,14 @@ def build_model(name: str, cfg, gate_mode: str = "full") -> Operator2d:
         return agfno2d(cfg, gate_mode=gate_mode)
     if name in ("geofno", "deformfno", "geo-fno"):
         return geofno2d(cfg)
+    if name in ("afno",):
+        from .afno import afno2d
+
+        return afno2d(cfg)
+    if name in ("agfafno", "agf-afno"):
+        from .afno import agfafno2d
+
+        return agfafno2d(cfg, gate_mode=gate_mode)
     if name in ("unet", "cno"):
         # External convolutional baselines (parameter-matched to fno2d(cfg));
         # built through baselines.py so every experiment inherits matching.

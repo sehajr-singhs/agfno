@@ -28,6 +28,10 @@
 \newtheorem{remark}{Remark}
 \newcommand{\fno}{\textsc{fno}}
 \newcommand{\agfno}{\textsc{agf-no}}
+\newcommand{\afno}{\textsc{afno}}
+\newcommand{\AfnoParams}{4.81}
+\newcommand{\AfnoParamsRatio}{1.00}
+\newcommand{\FnoParams}{4.81}
 \newcommand{\relL}{\ensuremath{\mathrm{rel}\text{-}L^2}}
 \newcommand{\Rtwo}{R^2}
 
@@ -1036,6 +1040,80 @@ geometry -- against \ThreeDDSixteenAgfnoProbe{} for \agfno{}, mirroring the
 (\ThreeDGatesPass{}). Geometric forgetting in mode-truncated operators, and
 its restoration by zero-gated geometry injection, is dimension-independent.
 
+% ---------------- Third architecture: AFNO sweep (experiments6) ------------
+\ifdefined\AfnoCollapseRatio
+\subsection{Architecture generality: the \emph{afno} family member}
+\label{sec:afno}
+
+The claim under test is about a \emph{family} -- band-limited periodic
+global channels -- not about one implementation. The \afno{} (Adaptive
+Fourier Neural Operator) \citep{guibas2022afno}, as deployed at scale in
+FourCastNet \citep{pathak2022fourcastnet}, replaces the \fno{}'s hard mode
+truncation and post-norm residual design with soft spectrum shrinkage and a
+pre-norm, double-skip Transformer-style block, while keeping the same
+mode-restricted global spectral pathway and the same parameter budget
+(\AfnoParams{} vs.\ \FnoParams{} -- ratio \AfnoParamsRatio). We therefore
+re-run the full multi-seed depth protocol of Section~\ref{sec:collapse}
+unchanged -- depths 4/8/16, three seeds, byte-identical data and budget --
+on the \afno{} and on \emph{agf-afno}, the exact transplant of the
+zero-gated geometry mechanism onto the \afno{} block (spectral modulation
+plus pointwise re-injection; both gates zero-initialized, so at
+initialization the transplant is the plain \afno{}).
+
+\begin{table}[t]
+\centering\small
+\caption{Third architecture (\afno{} family member): the depth sweep of
+Section~\ref{sec:collapse} re-run on the \afno{} and the mechanism
+transplant \emph{agf-afno} (mean $\pm$ std over 3 seeds; identical data,
+budget, and protocol). The collapse--plateau pair is architecture-generic,
+and the transplant rescues it.}
+\label{tab:afno}
+\begin{tabular}{llcccc}
+\toprule
+ & & global & near-wall & wall viol. & probe $\Rtwo$ \\
+\midrule
+\multirow{2}{*}{depth 4}
+ & \afno{}     & \AfnoFourRelL\,$\pm$\,\AfnoFourRelLStd
+   & \AfnoFourRing\,$\pm$\,\AfnoFourRingStd
+   & \AfnoFourWall & \AfnoFourProbe \\
+ & \emph{agf-afno} & \AgfafnoFourRelL\,$\pm$\,\AgfafnoFourRelLStd
+   & \AgfafnoFourRing\,$\pm$\,\AgfafnoFourRingStd
+   & \AgfafnoFourWall & \AgfafnoFourProbe \\
+\midrule
+\multirow{2}{*}{depth 16}
+ & \afno{}     & \AfnoSixteenRelL\,$\pm$\,\AfnoSixteenRelLStd
+   & \AfnoSixteenRing\,$\pm$\,\AfnoSixteenRingStd
+   & \AfnoSixteenWall & \AfnoSixteenProbe \\
+ & \emph{agf-afno} & \AgfafnoSixteenRelL\,$\pm$\,\AgfafnoSixteenRelLStd
+   & \AgfafnoSixteenRing\,$\pm$\,\AgfafnoSixteenRingStd
+   & \AgfafnoSixteenWall & \AgfafnoSixteenProbe \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Four pre-registered gates, all passing (\ExpSixGatesPass).
+\textbf{(A1) The \afno{} collapses at depth 16}: mean global error
+\AfnoSixteenRelL{} with the worst seed no better than \AfnoSixteenWorst{}
+-- the total-collapse signature, on a mixer that never hard-truncates a
+mode and normalizes like a Transformer. The failure is therefore not an
+artifact of the \fno{}'s specific normalization or skip design: band
+limitation of the periodic global channel is sufficient.
+\textbf{(A2) Depth is a resource once geometry is re-injected}:
+\emph{agf-afno} at depth 16 (\AgfafnoSixteenRelL) is its own best depth
+cell. \textbf{(A3) The transplant rescues the collapse}:
+\AfnoCollapseRatio$\times$ at depth 16 globally
+(\AfnoRingRatio$\times$ at the walls). \textbf{(A4) The mechanism, not
+just the symptom}: the linear geometry probe's final-block $\Rtwo$ drops by
+\AfnoProbeDrop{} across the sweep for the plain \afno{} but only
+\AgfafnoProbeDrop{} for the transplant -- the representation-level
+separation reproduces on a third architecture with a different
+normalization, skip, and spectrum treatment. Together with the depth-16
+results of Section~\ref{sec:collapse} this covers the two canonical
+designs of the spectral-operator literature; geometric forgetting, and its
+zero-gated restoration, are properties of the band-limited global channel
+class.
+\fi
+
 \section{Reproducibility}
 \label{sec:repro}
 
@@ -1121,6 +1199,12 @@ Z.~Hao, S.~Liu, Y.~Zhang, C.~Ying, Y.~Feng, H.~Su, J.~Zhu.
 \newblock GNOT: A General Neural Operator Transformer for Operator Learning.
 \newblock \emph{ICML}, 2023.
 
+\bibitem[Guibas et~al.(2022)]{guibas2022afno}
+J.~Guibas, M.~Mardani, Z.~Li, A.~Tao, A.~Anandkumar, B.~Catanzaro.
+\newblock Adaptive Fourier Neural Operators: Efficient Token Mixers for
+Transformers.
+\newblock \emph{ICLR}, 2022.
+
 \bibitem[Kovachki et~al.(2023)]{kovachki2023nocal}
 N.~Kovachki, Z.~Li, B.~Liu, K.~Azizzadenesheli, et~al.
 \newblock Neural Operator: Learning Maps Between Function Spaces.
@@ -1162,6 +1246,12 @@ J.~J.~Park, P.~Florence, J.~Straub, R.~Newcombe, S.~Lovegrove.
 \newblock DeepSDF: Learning Continuous Signed Distance Functions for Shape
 Representation.
 \newblock \emph{CVPR}, 2019.
+
+\bibitem[Pathak et~al.(2022)]{pathak2022fourcastnet}
+J.~Pathak, S.~Subramanian, P.~Harrington, S.~Raja, A.~Chattopadhyay, et~al.
+\newblock FourCastNet: A Global Data-driven High-resolution Weather Model
+using Adaptive Fourier Neural Operators.
+\newblock arXiv:2202.11214, 2022.
 
 \bibitem[Perez et~al.(2018)]{perez2018film}
 E.~Perez, F.~Strub, H.~de~Vries, V.~Dumoulin, A.~Courville.

@@ -46,7 +46,8 @@ git clone https://github.com/sehajr-singhs/agfno
 cd agfno
 pip install -r requirements.txt
 
-# 41 unit tests: solvers, SDFs, the zero-gate identity, gates, probe
+# 49 unit tests: solvers, SDFs, the zero-gate identity, gates, probe,
+# AFNO contract (band-limitation, param match, transplant equivalence)
 python -m pytest agfno/tests -q
 
 # CPU smoke: data → 1 epoch → eval → probe, every experiment family
@@ -73,11 +74,17 @@ agfno/            package
   probe.py        closed-form ridge probe (decodable geometry per block)
   analysis.py     frequency-resolved attribution, sinc footprints
   diagnostic.py   a-priori Δρ diagnostic
+  afno.py         the AFNO family member (soft-shrinkage mixer, pre-norm
+                  double-skip) + the zero-gated AGF-AFNO transplant
   experiments*.py controlled matrix, PDE2, depth sweep (3 seeds), 3-D matrix,
-                  matched external baselines (U-Net + CNO, parameter-matched) and the
-                  pilot-budget four-way suite (experiments5p)
+                  matched external baselines (U-Net + CNO, parameter-matched),
+                  the pilot-budget four-way suite (experiments5p), and the
+                  third-architecture AFNO sweep (experiments6, gates A1–A4)
+  merge_exp6.py   split-kernel merge for the AFNO sweep
+  midnight_push.py headless automation: waits out the Kaggle GPU quota,
+                  pushes/polls/pulls all staged kernels, merges, rebuilds PDF
   baselines.py    parameter-matched U-Net + faithful CNO (width auto-bisected to budget)
-  tests/          43 tests
+  tests/          49 tests
 paper/            main.tex (16 pp), macros.tex (250+ programmatic macros), compiled PDF,
                   gen_hero.py (regenerates the qualitative hero figure from the HF checkpoints)
 results/          committed run JSONs (12 cells × 3 seeds) + summaries
