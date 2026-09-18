@@ -693,3 +693,55 @@ def test_dim_agnostic_losses_match_2d_values():
     ref = (torch.sqrt(((pred - tgt) ** 2).sum(dim=(2, 3)) + 1e-12)
            / torch.sqrt((tgt**2).sum(dim=(2, 3)) + 1e-12)).mean()
     assert torch.isclose(U.relative_l2_loss(pred, tgt), ref, atol=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+# External baselines (U-Net, CNO): parameter-matched convolutional rivals
+# --------------------------------------------------------------------------- #
+def _fno_params() -> int:
+    return sum(p.numel() for p in build_model("fno", C.MODEL).parameters())
+
+
+@pytest.mark.parametrize("kind", ["unet", "cno"])
+def test_baselines_param_matched_and_io(kind):
+    """Baselines must land within +/-15% of the FNO budget and share its I/O."""
+    m = build_model(kind, C.MODEL).eval()
+    n = sum(p.numel() for p in m.parameters())
+    ref = _fno_params()
+    assert abs(n - ref) / ref < 0.15, f"{kind}: {n} vs FNO {ref}"
+    B, H = 2, 48
+    a = torch.randn(B, C.MODEL.in_ch, H, H)
+    sdf = torch.randn(B, C.MODEL.sdf_ch, H, H)
+    with torch.no_grad():
+        out = m(a, sdf)
+    assert out.shape == (B, C.MODEL.out_ch, H, H)
+    # gradient flow through the whole net
+    m.train()
+    out = m(a, sdf)
+    U.relative_l2_loss(out, torch.randn_like(out)).backward()
+    assert all(p.grad is not None for p in m.parameters())
+
+
+def test_baseline_param_matching_deterministic():
+    """Width search must be deterministic (same ARCHITECTURE every call;
+    init weights are random, exactly like every other model here)."""
+    a = build_model("unet", C.MODEL)
+    b = build_model("unet", C.MODEL)
+    sa, sb = a.state_dict(), b.state_dict()
+    assert set(sa) == set(sb)
+    for k in sa:
+        assert sa[k].shape == sb[k].shape, k
+    na = sum(p.numel() for p in a.parameters())
+    nb = sum(p.numel() for p in b.parameters())
+    assert na == nb
+
+
+def test_cno_output_resolution_equals_input():
+    """CNO's upsampling half must return to full input resolution."""
+    from agfno.baselines import CNO2d
+
+    m = CNO2d(in_ch=6, width=24).eval()  # in_ch = x + g concatenated
+    for res in (32, 48, 64):
+        x = torch.randn(1, 3, res, res)
+        y = m(x, x)
+        assert y.shape[-2:] == (res, res), f"res {res}: {tuple(y.shape)}"

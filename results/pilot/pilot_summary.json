@@ -1,0 +1,58 @@
+{
+ "summary": {
+  "fno": {
+   "n_seeds": 3,
+   "rel_l2_mean": 0.22030637661616007,
+   "rel_l2_std": 0.012246863980159312,
+   "rel_l2_ring_mean": 0.2889956384897232,
+   "rel_l2_ring_std": 0.004778515295973516,
+   "wall_viol_mean": 0.08442867050568263,
+   "wall_viol_std": 0.0038173433645361326,
+   "params": 4810241
+  },
+  "unet": {
+   "n_seeds": 3,
+   "rel_l2_mean": 0.09474694977204005,
+   "rel_l2_std": 0.0009666782152006142,
+   "rel_l2_ring_mean": 0.17418549954891205,
+   "rel_l2_ring_std": 0.004682699152013605,
+   "wall_viol_mean": 0.1048489511013031,
+   "wall_viol_std": 0.0038948622664983904,
+   "params": 4584131
+  },
+  "cno": {
+   "n_seeds": 3,
+   "rel_l2_mean": 0.2064776966969172,
+   "rel_l2_std": 0.0057469428963284165,
+   "rel_l2_ring_mean": 0.38556379079818726,
+   "rel_l2_ring_std": 0.00607531884554337,
+   "wall_viol_mean": 0.27672386666138965,
+   "wall_viol_std": 0.006600059044603035,
+   "params": 4845458
+  },
+  "agfno": {
+   "n_seeds": 3,
+   "rel_l2_mean": 0.15293988088766733,
+   "rel_l2_std": 0.0035145021518460822,
+   "rel_l2_ring_mean": 0.16319289555152258,
+   "rel_l2_ring_std": 0.0025742421159032224,
+   "wall_viol_mean": 0.021710580525298912,
+   "wall_viol_std": 0.0029320110609368615,
+   "params": 5102345
+  },
+  "_pilot_protocol": {
+   "n_train": "256",
+   "n_val": "64",
+   "n_test": "128",
+   "res": "48",
+   "epochs": "32",
+   "batch": "16"
+  },
+  "_pilot_gates": {
+   "agf_best_or_tied_ring": true,
+   "agf_wall_best": true,
+   "cno_ring_ge_fno": true,
+   "PILOT_ORDERING_PASS": true
+  }
+ }
+}

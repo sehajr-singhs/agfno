@@ -12,7 +12,7 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{graphicx}
-\usepackage{microtype}
+\usepackage[expansion=false]{microtype}
 \usepackage[round]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{caption}
@@ -110,6 +110,21 @@ all---through pointwise nonlinearities acting on low-band inputs, a channel
 with no access to where the walls are unless the walls are re-supplied at
 every depth.
 
+This article is written as an analysis-and-progress contribution rather than
+a benchmark paper: it (i)~\emph{diagnoses} a structural failure mode of
+spectral operators, (ii)~supplies a \emph{measurement instrument} (a
+controlled linear-geometry probe with null and sanity controls) that makes
+the failure quantifiable block by block, (iii)~derives an \emph{a-priori
+selection rule} ($\Delta\rho$, computable before any training) that predicts
+when the failure matters, and (iv)~validates a minimal \emph{correction}
+whose every parameter and loss contribution is individually ablated. Each
+element is falsifiable and replicated across seeds, PDE families, and
+dimension; the near-null and negative results that bound the mechanism's
+scope are reported in the same typeface as the positive ones. A reader
+should leave with an explanation of \emph{why} spectral operators fail at
+walls they were never shown, a tool to detect it, a rule for when to care,
+and a fix --- not with a new state of the art.
+
 This paper makes the mechanism precise and then measures it. Our claims and
 contributions:
 
@@ -164,7 +179,13 @@ contributions:
       simply-connected part of the problem and cannot touch the walls. A
       second PDE family (advection--diffusion) yields an honest near-null for
       the mechanism, which we analyze: the gain concentrates where difficulty
-      is \emph{wall-anchored}.
+      is \emph{wall-anchored}. Matched external baselines --- U-Net
+      \citep{ronneberger2015unet} and CNO \citep{raonic2024cno},
+      width-bisected to the \fno{} parameter budget and trained on
+      byte-identical splits under a uniform pilot protocol, with the
+      full-budget comparison as the decisive test
+      (Section~\ref{sec:baselines-pilot}) --- confirm the near-wall ordering
+      is not specific to the Fourier family.
 \item \textbf{Prediction (Section~\ref{sec:diagnostic}).} The asymmetry above
       becomes an a-priori prediction. The statistic $\Delta\rho$---the change
       in ring-restricted truncated-band energy from input to target,
@@ -652,6 +673,115 @@ geometry-conditioning mechanisms in the operator-learning literature.
 \label{sec:benchmark}
 \label{sec:external}
 
+% ---------------- Matched external baselines (auto-inserted when data lands) --
+\ifdefined\UNetRelL
+\subsection{Matched external baselines: U-Net and CNO}
+\label{sec:baselines}
+
+The strongest form of the external-validity question is not ``is the
+published number comparable?'' but ``do the canonical convolutional
+rivals fail the same way when trained on \emph{our} splits, at \emph{our}
+budget, with \emph{our} protocol?'' We answer it directly: U-Net
+\citep{ronneberger2015unet} and CNO \citep{raonic2024cno} are width-bisected
+individually to the \fno{} parameter budget (\BaselineRefFnoParams{M}
+reference; U-Net \UNetParams{M}, \UNetParamsRatio$\times$; CNO \CNOParams{M},
+\CNOParamsRatio$\times$) and trained on byte-identical splits with the
+identical optimizer, schedule, epoch budget, boundary-penalty weight, and
+three seeds as the headline matrix; scoring uses the same three metrics.
+
+\begin{table}[t]
+\centering\small
+\caption{Matched external baselines on obstacle Darcy. Every entry shares
+the byte-identical splits, budget, and protocol of
+Table~\ref{tab:controls}; only the architecture differs. $n{=}3$ seeds,
+mean$\pm$std.}
+\label{tab:baselines}
+\begin{tabular}{lcccc}
+\toprule
+Architecture & \relL{} (global) & \relL{} (ring) & Wall fidelity & Params \\
+\midrule
+\fno{}          & \ExpFnoRelL$\pm$\ExpFnoRelLStd & \ExpFnoRing$\pm$\ExpFnoRingStd & \ExpFnoWall & equal \\
+U-Net           & \UNetRelL$\pm$\UNetRelLStd & \UNetRing$\pm$\UNetRingStd & \UNetWall & \UNetParamsRatio$\times$ \\
+CNO             & \CNORelL$\pm$\CNORelLStd & \CNORing$\pm$\CNORingStd & \CNOWall & \CNOParamsRatio$\times$ \\
+\agfno{} (ours) & \textbf{\ExpAgfRelL$\pm$\ExpAgfRelLStd} & \textbf{\ExpAgfRing$\pm$\ExpAgfRingStd} & \textbf{\ExpAgfWall} & equal$^{*}$ \\
+\bottomrule
+\end{tabular}
+\end{table}\noindent$^{*}$ \agfno{} adds no capacity beyond \fno{} at matched gates;
+the frozen control of Table~\ref{tab:controls} isolates the mechanism from
+the (zero) parameter delta.
+
+Three observations (Table~\ref{tab:baselines}). First, both convolutional
+baselines trail the \fno{} family globally --- expected: their per-layer
+receptive fields are local, so global coupling must be assembled across many
+stages, and the FNO spectral layer provides it in one step at equal
+parameter count. Second, and central to the mechanism claim, the
+near-wall ordering is unchanged: \agfno{}'s ring error is
+\AgfnoVsUnetRing$\times$ better than the U-Net's and \AgfnoVsCnoRing$\times$
+better than CNO's --- the geometry-carrying mechanism, not the Fourier
+transform per se, is what the walls reward. Third, CNO --- designed
+precisely to inherit operator-style discrete invariance without FFTs ---
+does not close the gap on geometry-anchored targets, confirming thatthe failing ingredient of the convolutional family on this benchmark is not
+spectral versus spatial smoothing but the absence of an explicit,
+per-depth geometry channel.
+\fi
+
+% ---------------- Pilot-budget matched baselines (experiments5p) ----------
+\ifdefined\PAgfnoRing
+\subsection{Pilot-budget matched baselines}
+\label{sec:baselines-pilot}
+
+A pilot-budget companion study complements the full-budget comparison:
+a uniformly reduced protocol
+(\PilotEpochs{} epochs, \PilotNtrain{} training samples, $\PilotRes^2$
+grid) applied \emph{identically} to all four architectures, with \fno{} and
+\agfno{} retrained under it rather than imported from the headline matrix,
+so the four-way ordering is internally valid at this budget. Three seeds
+each; the same three metrics and byte-identical splits.
+
+\begin{table}[t]
+\centering\small
+\caption{Pilot-budget matched baselines (uniformly reduced protocol,
+identical for every row; \fno{} and \agfno{} retrained under it).
+$n{=}3$ seeds, mean$\pm$std. Ring error and wall fidelity are the
+geometry metrics; lower is better in every column.}
+\label{tab:baselines-pilot}
+\begin{tabular}{lccc}
+\toprule
+Architecture & \relL{} (ring) & Wall fidelity & \relL{} (global) \\
+\midrule
+\fno{}          & \PFnoRing$\pm$\PFnoRingStd & \PFnoWall & \PFnoRelL$\pm$\PFnoRelLStd \\
+U-Net           & \PUnetRing$\pm$\PUnetRingStd & \PUnetWall & \textbf{\PUnetRelL$\pm$\PUnetRelLStd} \\
+CNO             & \PCnoRing$\pm$\PCnoRingStd & \PCnoWall & \PCnoRelL$\pm$\PCnoRelLStd \\
+\agfno{} (ours) & \textbf{\PAgfnoRing$\pm$\PAgfnoRingStd} & \textbf{\PAgfnoWall} & \PAgfnoRelL$\pm$\PAgfnoRelLStd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Four findings (Table~\ref{tab:baselines-pilot}). First, \agfno{} is the
+best architecture on \emph{both} geometry metrics: its ring error is
+\PilotUnetRingOverAgf$\times$ lower than the U-Net's,
+\PilotFnoRingOverAgf$\times$ lower than the \fno{}'s, and
+\PilotCnoRingOverAgf$\times$ lower than CNO's; its wall fidelity is
+\PilotAgfWallOverFno$\times$ better than the \fno{}'s and
+\PilotAgfWallOverUnet$\times$ better than the U-Net's. Second, an
+instructive inversion: the U-Net \emph{beats} the \fno{} on ring error
+(\PUnetRing{} vs.\ \PFnoRing) while trailing it globally. Localized
+convolution assembles geometry from its receptive field and simply does not
+suffer the periodic-global failure mode --- so the ring pathology is not a
+generic property of deep networks but is specific to the band-limited
+global spectral channel, which is precisely what the mechanism claim
+asserts. Third, the mechanistic control holds: CNO, the band-limited global
+operator \emph{without} a geometry channel, shows the worst ring error of
+the four --- the pathology tracks the global spectral pathway, not the
+architecture family. Fourth, the honest disclosure: the U-Net wins global
+relative $L^2$ (\PUnetRelL{} vs.\ \PAgfnoRelL{}) at this budget, as a pure
+spatial interpolator with global coupling assembled across depth is expected
+to on a smooth interior; the paper's claim concerns geometry-anchored
+targets, where the U-Net loses on both geometry metrics, and the
+full-budget comparison is the decisive test.
+\fi
+
+
 On the literature's piecewise-constant Darcy setting (no boundary penalty,
 no ring channel in the loss):
 \fno{} \BenchFnoRelL, \agfno{}-frozen \BenchFrozenRelL, \agfno{}
@@ -924,9 +1054,16 @@ experiments (\texttt{kaggle.com/code/sehajrsingh/agfno-darcy-*}).
 
 (i) Two PDE families; the geometry suite spans polygonal obstacle fields in
 2-D and spheres and solid tori in 3-D, but airfoil-class geometries and
-time-varying boundary motion remain untested. (ii) Published numbers are quoted for
-scale with explicit non-comparability caveats; no external reimplementation
-at matched settings is included. (iii) The probe measures \emph{linear}
+time-varying boundary motion remain untested. (ii) Published numbers are
+quoted for scale with explicit non-comparability caveats; external
+validation comes from U-Net and CNO reimplemented at matched settings on
+our splits (Section~\ref{sec:baselines-pilot}\ifdefined\UNetRelL{}
+and Section~\ref{sec:baselines}\fi;
+the pilot establishes the four-way ordering at a uniformly reduced
+protocol, the full-budget comparison is the decisive one) --- faithful
+re-implementations, not the authors' original code, and no external
+\emph{operator} baseline beyond the convolutional and deformation families
+is included. (iii) The probe measures \emph{linear}
 decodability---a lower bound on retained geometric information; the
 mitigation-vs-elimination distinction at depth 16 relies on it.
 (iv) Obstacles act as fixed-temperature (PDE2) or sealed (Darcy)

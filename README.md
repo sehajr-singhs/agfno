@@ -73,9 +73,12 @@ agfno/            package
   probe.py        closed-form ridge probe (decodable geometry per block)
   analysis.py     frequency-resolved attribution, sinc footprints
   diagnostic.py   a-priori Δρ diagnostic
-  experiments*.py controlled matrix, PDE2, depth sweep (3 seeds), 3-D matrix
-  tests/          41 tests
-paper/            main.tex (15 pp), macros.tex (221 programmatic macros), compiled PDF,
+  experiments*.py controlled matrix, PDE2, depth sweep (3 seeds), 3-D matrix,
+                  matched external baselines (U-Net + CNO, parameter-matched) and the
+                  pilot-budget four-way suite (experiments5p)
+  baselines.py    parameter-matched U-Net + faithful CNO (width auto-bisected to budget)
+  tests/          43 tests
+paper/            main.tex (16 pp), macros.tex (250+ programmatic macros), compiled PDF,
                   gen_hero.py (regenerates the qualitative hero figure from the HF checkpoints)
 results/          committed run JSONs (12 cells × 3 seeds) + summaries
 figs/             paper figures (PNG), incl. hero_qualitative.png (depth-16 FNO 1.010 vs

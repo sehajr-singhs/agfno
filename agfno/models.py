@@ -377,7 +377,13 @@ def build_model(name: str, cfg, gate_mode: str = "full") -> Operator2d:
         return agfno2d(cfg, gate_mode=gate_mode)
     if name in ("geofno", "deformfno", "geo-fno"):
         return geofno2d(cfg)
-    raise ValueError(f"unknown model '{name}' (expected 'fno', 'agfno', or 'geofno')")
+    if name in ("unet", "cno"):
+        # External convolutional baselines (parameter-matched to fno2d(cfg));
+        # built through baselines.py so every experiment inherits matching.
+        from .baselines import build_baseline
+
+        return build_baseline(name, cfg)
+    raise ValueError(f"unknown model '{name}' (expected 'fno', 'agfno', 'geofno', 'unet', or 'cno')")
 
 
 # --------------------------------------------------------------------------- #
